@@ -10,6 +10,8 @@ export async function main(ns) {
 		var sleepTime = 5000;
 		var player = ns.getPlayer();
 
+		ns.print("\n")
+
 		getPrograms(ns, player);
 
 		joinFactions(ns);
@@ -28,11 +30,11 @@ export async function main(ns) {
 			sleepTime = chooseAction(ns, sleepTime, player, factionsForReputation);
 		}
 
-		ns.print("WorkFactionName: " + player.currentWorkFactionName)
-		ns.print("WorkFactionDescription: " + player.currentWorkFactionDescription)
-		ns.print("workType: " + player.workType)
-		ns.print("companyName: " + player.companyName)
-		ns.print("jobs: " + JSON.stringify(player.jobs))
+		//ns.print("WorkFactionName: " + ns.singularity.getCurrentWork().factionName);
+		//ns.print("WorkFactionDescription: " + ns.singularity.getCurrentWork().factionWorkType);
+		//ns.print("workType: " + ns.singularity.getCurrentWork().type);
+		//ns.print("companyName: " + Object.keys(player.jobs)[0]);
+		//ns.print("jobs: " + JSON.stringify(player.jobs));
 		//ns.print("Corps to work for: " + getCorpsForReputation(factionsForReputation))
 		//ns.print("sleep for " + sleepTime + " ms")
 		await ns.sleep(sleepTime);
@@ -44,23 +46,23 @@ function upgradeHomeServer(ns, player) {
 	// TODO: Consider moving this to the trading script, fits better there (and saves ram here)
 	// ns.purchase4SMarketDataTixApi();
 	//}
-	if (player.money > ns.getUpgradeHomeRamCost()) {
-		if (!player.factions.includes("CyberSec") || ns.getUpgradeHomeRamCost() < 2e9
-			|| (player.has4SDataTixApi && ns.getUpgradeHomeRamCost() < 0.2 * player.money)) {
+	if (player.money > ns.singularity.getUpgradeHomeRamCost()) {
+		if (ns.singularity.getUpgradeHomeRamCost() < 2e9 
+			|| (ns.stock.has4SDataTIXAPI() && ns.singularity.getUpgradeHomeRamCost() < 0.2 * player.money)) {
 			// Upgrade slowly in the first run while we save money for 4S or the first batch of augmentations
 			// Assumption: We wont't join Cybersec after the first run anymore
 			// ToDo: Beautification: At Max Home Server Ram, it still tries to upgrade RAM -> prevent that
 			ns.print("Upgraded Home Server RAM");
 			//ns.toast("Upgraded Home Server RAM");
-			ns.upgradeHomeRam();
+			ns.singularity.upgradeHomeRam();
 		}
 	}
 }
 
 function getPrograms(ns, player) {
-	if (!player.tor) {
+	if (!ns.hasTorRouter()) {
 		if (player.money > 1700000) {
-			ns.purchaseTor();
+			ns.singularity.purchaseTor();
 			ns.print("Purchased TOR");
 			ns.toast("Purchased TOR");
 		}
@@ -68,31 +70,31 @@ function getPrograms(ns, player) {
 			return;
 		}
 	}
-	ns.purchaseProgram("BruteSSH.exe");
-	ns.purchaseProgram("FTPCrack.exe");
-	ns.purchaseProgram("relaySMTP.exe");
-	if (player.has4SDataTixApi) {
+	ns.singularity.purchaseProgram("BruteSSH.exe");
+	ns.singularity.purchaseProgram("FTPCrack.exe");
+	ns.singularity.purchaseProgram("relaySMTP.exe");
+	if (ns.stock.has4SDataTIXAPI()) {
 		// do not buy more before 4s data access bought
-		ns.purchaseProgram("HTTPWorm.exe");
-		ns.purchaseProgram("SQLInject.exe");
+		ns.singularity.purchaseProgram("HTTPWorm.exe");
+		ns.singularity.purchaseProgram("SQLInject.exe");
 	}
 }
 
 function chooseAction(ns, sleepTime, player, factions) {
-	var focus = ns.isFocused();
+	var focus = ns.singularity.isFocused();
 	//ns.print("Focus: " + focus);
 
 	if (ns.getHackingLevel() < studyUntilHackLevel) {
-		ns.universityCourse("rothman university", "Study Computer Science", focus);
+		ns.singularity.universityCourse("rothman university", "Study Computer Science", focus);
 	}
 	else if (factions.size > 0) {
 		var faction = factions.keys().next().value;
 		const factionsFieldWork = ["Slum Snakes", "Tetrads"];
-		var wType = "Hacking Contracts";
+		var wType = "hacking";
 		if (factionsFieldWork.includes(faction)) {
-			wType = "Field Work";
+			wType = "field";
 		}
-		const success = ns.workForFaction(faction, wType, focus);
+		const success = ns.singularity.workForFaction(faction, wType, focus);
 		if (success) {
 			ns.print("Start working for faction " + faction);
 			ns.toast("Start working for faction " + faction, "success", 5000);
@@ -101,7 +103,7 @@ function chooseAction(ns, sleepTime, player, factions) {
 			ns.print("Could not perform intended action: " + faction + " -> " + wType);
 		}
 	}
-	else if (player.hacking >= 250) {
+	else if (player.skills.hacking >= 250) {
 		var corpsToWorkFor = getCorpsForReputation(ns, factions);
 		//ns.print("Corps to work for: " + corpsToWorkFor);
 		if (corpsToWorkFor.length > 0) {
@@ -122,24 +124,34 @@ function chooseAction(ns, sleepTime, player, factions) {
 
 function applyForPromotion(ns, player, corp) {
 
-	var career = "it"
+	var career = "IT"
 
-	var success = ns.applyToCompany(corp, career);
+	var success = ns.singularity.applyToCompany(corp, career);
 
 	if (success) {
 		ns.toast("Got a company promotion!");
 	}
-	ns.workForCompany(corp, ns.isFocused());
+	ns.singularity.workForCompany(corp, ns.singularity.isFocused());
 }
 
 function currentActionUseful(ns, player, factions) {
 	var playerControlPort = ns.getPortHandle(3); // port 2 is hack
-	if (player.workType == "Working for Faction") {
-		if (factions.has(player.currentWorkFactionName)) {
-			var repRemaining = factions.get(player.currentWorkFactionName) - player.workRepGained;
+
+	var faction = ns.singularity.getCurrentWork().factionName;
+	var factionWork = ns.singularity.getCurrentWork().factionWorkType;
+	var factionFavor = ns.singularity.getFactionFavor(faction);
+	var workType = ns.singularity.getCurrentWork().type;
+
+	var repRemaining = factions.get(faction);
+	var repPerSecond = ns.formulas.work.factionGains(player, factionWork, factionFavor).reputation * 5;
+	var repTimeRemaining = repRemaining / repPerSecond;
+
+	if (workType == "FACTION") {
+		if (factions.has(faction)) {
+			//var repRemaining = factions.get(faction);
 			if (repRemaining > 0) {
 				// working for a faction needing more reputation for augmentations
-				if (playerControlPort.empty() && player.currentWorkFactionDescription == "carrying out hacking contracts") {
+				if (playerControlPort.empty() && factionWork == "hacking") {
 					// only write to ports if empty
 					ns.print("ns.share() to increase faction reputation");
 					playerControlPort.write(true);
@@ -150,13 +162,13 @@ function currentActionUseful(ns, player, factions) {
 					playerControlPort.write(false);
 				}
 				// seems a cycle is .2 ms, so RepGainRate * 5 is gain per second
-				var reputationTimeRemaining = repRemaining / (player.workRepGainRate * 5);
-				ns.print("Reputation remaining: " + ns.nFormat(repRemaining, "0a") + " in " + ns.nFormat(reputationTimeRemaining / 60, "0a") + " min");
+				//ns.print("Reputation remaining: " + ns.nFormat(repRemaining, "0a") + " in " + ns.nFormat(repTimeRemaining / 60, "0a") + " min");
+				ns.print("Reputation remaining: " + ns.formatNumber(repRemaining, 0) + " in " + ns.formatNumber(repTimeRemaining / 60, 0) + " min");
 				return true;
 			}
 			else {
-				ns.print("Max Reputation @ " + player.currentWorkFactionName);
-				ns.toast("Max Reputation @ " + player.currentWorkFactionName, "success", 5000);
+				ns.print("Max Reputation @ " + faction);
+				ns.toast("Max Reputation @ " + faction, "success", 5000);
 				return false;
 			}
 		}
@@ -175,22 +187,22 @@ function currentActionUseful(ns, player, factions) {
 			playerControlPort.write(false);
 		}
 	}
-	if (player.workType == "Working for Company" && player.companyName != "") {
+	if (ns.singularity.getCurrentWork() == "COMPANY" && Object.keys(player.jobs)[0] != "") {
 		// for unknown reasons it might happen to have the work type "working for company" without actually working for one
 		// just to make sure, also check that we have a company.
 
 		var reputationGoal = 200000; // 200 but some is lost when stop working ; 266667 
 		// ToDo: except fulcrum + 66.666 k and bachman not hacked
 
-		var reputation = ns.getCompanyRep(player.companyName) + (player.workRepGained * 3 / 4);
-		ns.print("Company reputation: " + ns.nFormat(reputation, "0a"));
-		if (factions.has(player.companyName)) {
+		var reputation = ns.singularity.getCompanyRep(Object.keys(player.jobs)[0]);
+		ns.print("Company reputation: " + ns.formatNumber(reputation, 0));
+		if (factions.has(Object.keys(player.jobs)[0])) {
 			return false;
 		}
-		applyForPromotion(ns, player, player.companyName);
+		applyForPromotion(ns, player, Object.keys(player.jobs)[0]);
 		return true;
 	}
-	if (player.workType == "Studying or Taking a class at university") {
+	if (ns.singularity.getCurrentWork().type == "CLASS") {
 		if (ns.getHackingLevel() < studyUntilHackLevel) {
 			return true;
 		}
@@ -203,8 +215,8 @@ function getFactionsForReputation(ns, player) {
 	var factionsWithAugmentations = new Map();
 	for (const faction of player.factions) {
 		var maxReputationRequired = maxAugmentRep(ns, faction);
-		if (ns.getFactionRep(faction) < maxReputationRequired) {
-			factionsWithAugmentations.set(faction, maxReputationRequired - ns.getFactionRep(faction));
+		if (ns.singularity.getFactionRep(faction) < maxReputationRequired) {
+			factionsWithAugmentations.set(faction, maxReputationRequired - ns.singularity.getFactionRep(faction));
 		}
 	}
 	return factionsWithAugmentations;
@@ -225,12 +237,12 @@ function buyAugments(ns, player) {
 	var sortedAugmentations = [];
 
 	for (const faction of player.factions) {
-		var purchasedAugmentations = ns.getOwnedAugmentations(true);
-		var augmentations = ns.getAugmentationsFromFaction(faction);
+		var purchasedAugmentations = ns.singularity.getOwnedAugmentations(true);
+		var augmentations = ns.singularity.getAugmentationsFromFaction(faction);
 		var newAugmentations = augmentations.filter(val => !purchasedAugmentations.includes(val));
 		for (const augmentation of newAugmentations) {
-			if (ns.getAugmentationRepReq(augmentation) <= ns.getFactionRep(faction)) {
-				sortedAugmentations.push([augmentation, ns.getAugmentationPrice(augmentation)]);
+			if (ns.singularity.getAugmentationRepReq(augmentation) <= ns.singularity.getFactionRep(faction)) {
+				sortedAugmentations.push([augmentation, ns.singularity.getAugmentationPrice(augmentation)]);
 			}
 		}
 	}
@@ -242,13 +254,11 @@ function buyAugments(ns, player) {
 	var skipAugments = [];
 	var overallAugmentationCost = 0;
 	for (var i = 0; i < sortedAugmentations.length; i++) {
-
-
-		for (var preReqAug of ns.getAugmentationPrereq(sortedAugmentations[i][0])) {
+		for (var preReqAug of ns.singularity.getAugmentationPrereq(sortedAugmentations[i][0])) {
 			if (!preReqAugments.includes(preReqAug) && !purchasedAugmentations.includes(preReqAug)) {
 				preReqAugments.push(preReqAug);
 				//ns.print("move prereq aug: " + preReqAug + " before " + sortedAugmentations[i][0]);
-				sortedAugmentations.splice(i, 0, [preReqAug, ns.getAugmentationPrice(preReqAug)]);
+				sortedAugmentations.splice(i, 0, [preReqAug, ns.singularity.getAugmentationPrice(preReqAug)]);
 				//overallAugmentationCost += sortedAugmentations[i][1] * augmentationCostMultiplier;
 				if (i >= 0) {
 					i--;
@@ -272,8 +282,9 @@ function buyAugments(ns, player) {
 		}
 	}
 
-	ns.print("Augmentation purchase order: " + sortedAugmentations)
-	ns.print("Current augmentation purchase cost: " + ns.nFormat(overallAugmentationCost, "0.0a"));
+	ns.print("Augmentation purchase order: " + sortedAugmentations);
+	//ns.print("Current augmentation purchase cost: " + ns.nFormat(overallAugmentationCost, "0.0a"));
+	ns.print("Current augmentation purchase cost: " + ns.formatNumber(overallAugmentationCost));
 
 	if (player.money > overallAugmentationCost) {
 		// decide when it's time to install
@@ -284,8 +295,8 @@ function buyAugments(ns, player) {
 }
 
 function maxAugmentRep(ns, faction) {
-	var purchasedAugmentations = ns.getOwnedAugmentations(true);
-	var augmentations = ns.getAugmentationsFromFaction(faction);
+	var purchasedAugmentations = ns.singularity.getOwnedAugmentations(true);
+	var augmentations = ns.singularity.getAugmentationsFromFaction(faction);
 	var newAugmentations = augmentations.filter(val => !purchasedAugmentations.includes(val));
 
 	if (newAugmentations.length > 0) {
@@ -299,7 +310,7 @@ function maxAugmentRep(ns, faction) {
 					continue;
 				}
 			}
-			maxReputationRequired = Math.max(maxReputationRequired, ns.getAugmentationRepReq(augmentation));
+			maxReputationRequired = Math.max(maxReputationRequired, ns.singularity.getAugmentationRepReq(augmentation));
 		}
 		return maxReputationRequired;
 		// go for the last augmentation in the list. Assumption: Higher rep augs from follow-up factions
@@ -310,10 +321,10 @@ function maxAugmentRep(ns, faction) {
 }
 
 function joinFactions(ns) {
-	const newFactions = ns.checkFactionInvitations();
+	const newFactions = ns.singularity.checkFactionInvitations();
 	for (const faction of newFactions) {
 		if (!cityFactions.includes(faction) && maxAugmentRep(ns, faction)) {
-			ns.joinFaction(faction);
+			ns.singularity.joinFaction(faction);
 			ns.print("Joined " + faction);
 		}
 	}
@@ -329,8 +340,8 @@ function commitCrime(ns, player, combatStatsGoal = 300) {
 	var bestCrimeValue = 0;
 	var bestCrimeStats = {};
 	for (let crime of crimes) {
-		let crimeChance = ns.getCrimeChance(crime);
-		var crimeStats = ns.getCrimeStats(crime);
+		let crimeChance = ns.singularity.getCrimeChance(crime);
+		var crimeStats = ns.singularity.getCrimeStats(crime);
 		if (crime == "Assassination" && player.numPeopleKilled < 30 && crimeChance > 0.98) {
 			bestCrime = "Assassination";
 			bestCrimeStats = crimeStats;
@@ -342,16 +353,16 @@ function commitCrime(ns, player, combatStatsGoal = 300) {
 			break;
 		}
 		var crimeValue = 0;
-		if (player.strength < combatStatsGoal) {
+		if (player.skills.strength < combatStatsGoal) {
 			crimeValue += 100000 * crimeStats.strength_exp;
 		}
-		if (player.defense < combatStatsGoal) {
+		if (player.skills.defense < combatStatsGoal) {
 			crimeValue += 100000 * crimeStats.defense_exp;
 		}
-		if (player.dexterity < combatStatsGoal) {
+		if (player.skills.dexterity < combatStatsGoal) {
 			crimeValue += 100000 * crimeStats.dexterity_exp;
 		}
-		if (player.agility < combatStatsGoal) {
+		if (player.skills.agility < combatStatsGoal) {
 			crimeValue += 100000 * crimeStats.agility_exp;
 		}
 		crimeValue += crimeStats.money;
@@ -364,9 +375,10 @@ function commitCrime(ns, player, combatStatsGoal = 300) {
 		}
 	}
 
-	ns.commitCrime(bestCrime);
+	ns.singularity.commitCrime(bestCrime);
 
-	ns.print("Crime value " + ns.nFormat(bestCrimeValue, "0a") + " for " + bestCrime);
+	//ns.print("Crime value " + ns.nFormat(bestCrimeValue, "0a") + " for " + bestCrime);
+	ns.print("Crime value " + ns.formatNumber(bestCrimeValue, 0) + " for " + bestCrime);
 	return bestCrimeStats.time + 10;
 }
 
