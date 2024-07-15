@@ -62,7 +62,7 @@ function tendStocks(ns) {
 	}
 
 	for (const stock of stocks) {
-		var money = ns.getServerMoneyAvailable("home") * .7; // Limit to use 70% of money
+		var money = ns.getServerMoneyAvailable("home");
 		//ns.print(`INFO ${stock.summary}`);
 		if (stock.forecast > 0.55) {
 			longStocks.add(stock.sym);

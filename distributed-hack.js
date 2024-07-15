@@ -118,7 +118,7 @@ export async function main(ns) {
 							const homeMaxRam = ns.getServerMaxRam("home");
 							const homeUsedRam = ns.getServerUsedRam("home")
 							const homeFreeRam = homeMaxRam - homeUsedRam;
-							if (homeFreeRam >= backdoorScriptRam && !ns.getServer(server).backdoorInstalled) {
+							if (homeFreeRam >= backdoorScriptRam) {
 								const backdoorSuccess = ns.exec(backdoorScript, "home", 1, server);
 								ns.print("INFO backdoor on " + server + " - " + backdoorSuccess);
 								backdoorServers.delete(backdoorServer);
