@@ -30,11 +30,11 @@ export async function main(ns) {
 			sleepTime = chooseAction(ns, sleepTime, player, factionsForReputation);
 		}
 
-		/s.print("WorkFactionName: " + ns.singularity.getCurrentWork().factionName);
-		ns.print("WorkFactionDescription: " + ns.singularity.getCurrentWork().factionWorkType);
-		ns.print("workType: " + ns.singularity.getCurrentWork().type);
-		ns.print("companyName: " + Object.keys(player.jobs)[0]);
-		ns.print("jobs: " + JSON.stringify(player.jobs));
+		//ns.print("WorkFactionName: " + ns.singularity.getCurrentWork().factionName);
+		//ns.print("WorkFactionDescription: " + ns.singularity.getCurrentWork().factionWorkType);
+		//ns.print("workType: " + ns.singularity.getCurrentWork().type);
+		//ns.print("companyName: " + Object.keys(player.jobs)[0]);
+		//ns.print("jobs: " + JSON.stringify(player.jobs));
 		//ns.print("Corps to work for: " + getCorpsForReputation(factionsForReputation))
 		//ns.print("sleep for " + sleepTime + " ms")
 		await ns.sleep(sleepTime);
@@ -138,17 +138,17 @@ function applyForPromotion(ns, player, corp) {
 function currentActionUseful(ns, player, factions) {
 	var playerControlPort = ns.getPortHandle(3); // port 2 is hack
 
-	var faction = ns.singularity.getCurrentWork().factionName;
-	var factionWork = ns.singularity.getCurrentWork().factionWorkType;
-	var factionFavor = ns.singularity.getFactionFavor(faction);
-	var workType = ns.singularity.getCurrentWork().type;
-
-	var repRemaining = factions.get(faction);
-	var repPerSecond = ns.formulas.work.factionGains(player, factionWork, factionFavor).reputation * 5;
-	var repTimeRemaining = repRemaining / repPerSecond;
-
 	if (workType == "FACTION") {
 		if (factions.has(faction)) {
+			var faction = ns.singularity.getCurrentWork().factionName;
+			var factionWork = ns.singularity.getCurrentWork().factionWorkType;
+			var factionFavor = ns.singularity.getFactionFavor(faction);
+			var workType = ns.singularity.getCurrentWork().type;
+
+			var repRemaining = factions.get(faction);
+			var repPerSecond = ns.formulas.work.factionGains(player, factionWork, factionFavor).reputation * 5;
+			var repTimeRemaining = repRemaining / repPerSecond;
+
 			if (repRemaining > 0) {
 				// working for a faction needing more reputation for augmentations
 				if (playerControlPort.empty() && factionWork == "hacking") {
@@ -192,10 +192,7 @@ function currentActionUseful(ns, player, factions) {
 
 		var reputationGoal = 200000; // 200 but some is lost when stop working ; 266667 
 		// ToDo: except fulcrum + 66.666 k and bachman not hacked
-		
-		// removed the ` + (player.workRepGained * 3 / 4)` from the variable below
-		// since i didn't understand what it was exactly for 
-		// and i know that `player.workRepGained` crashes the script.
+
 		var reputation = ns.singularity.getCompanyRep(Object.keys(player.jobs)[0]);
 		ns.print("Company reputation: " + ns.formatNumber(reputation, 0));
 		if (factions.has(Object.keys(player.jobs)[0])) {
@@ -216,6 +213,7 @@ function getFactionsForReputation(ns, player) {
 
 	var factionsWithAugmentations = new Map();
 	for (const faction of player.factions) {
+		if(faction === 'Shadows of Anarchy') continue;
 		var maxReputationRequired = maxAugmentRep(ns, faction);
 		if (ns.singularity.getFactionRep(faction) < maxReputationRequired) {
 			factionsWithAugmentations.set(faction, maxReputationRequired - ns.singularity.getFactionRep(faction));
@@ -285,6 +283,7 @@ function buyAugments(ns, player) {
 	}
 
 	ns.print("Augmentation purchase order: " + sortedAugmentations);
+	//ns.print("Current augmentation purchase cost: " + ns.nFormat(overallAugmentationCost, "0.0a"));
 	ns.print("Current augmentation purchase cost: " + ns.formatNumber(overallAugmentationCost));
 
 	if (player.money > overallAugmentationCost) {
@@ -377,7 +376,7 @@ function commitCrime(ns, player, combatStatsGoal = 300) {
 	}
 
 	ns.singularity.commitCrime(bestCrime);
-
+	
 	ns.print("Crime value " + ns.formatNumber(bestCrimeValue, 0) + " for " + bestCrime);
 	return bestCrimeStats.time + 10;
 }
