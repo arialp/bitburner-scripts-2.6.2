@@ -3,12 +3,15 @@
 // requires 4s Market Data TIX API Access
 
 // defines if stocks can be shorted (see BitNode 8)
-const shortAvailable = false;
+let shortAvailable;
 
 const commission = 100000;
-
+/** @param {NS} ns */
 export async function main(ns) {
 	ns.disableLog("ALL");
+
+	const sourceFiles = ns.singularity.getOwnedSourceFiles();
+	(sourceFiles.some(sourcefile => sourcefile.n === 8)) ? shortAvailable = true : shortAvailable = false;
 
 	while (true) {
 		tendStocks(ns);
@@ -80,6 +83,7 @@ function tendStocks(ns) {
 			if (money > 500 * commission) {
 				const sharesToBuy = Math.min(stock.maxShares, Math.floor((money - commission) / stock.bidPrice));
 				if (ns.stock.short(stock.sym, sharesToBuy) > 0) {
+					//ns.print(`WARN ${stock.summary} SHORT BOUGHT ${ns.nFormat(sharesToBuy, "$0.0a")}`);
 					ns.print(`WARN ${stock.summary} SHORT BOUGHT \$${ns.formatNumber(sharesToBuy)}`);
 				}
 			}
