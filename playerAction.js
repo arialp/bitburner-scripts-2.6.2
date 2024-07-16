@@ -48,7 +48,7 @@ function upgradeHomeServer(ns, player) {
 		ns.stock.purchase4SMarketData();
 	}
 	if (player.money > ns.singularity.getUpgradeHomeRamCost()) {
-		if (ns.singularity.getUpgradeHomeRamCost() < 2e9 
+		if (ns.singularity.getUpgradeHomeRamCost() < 2e9
 			|| (ns.stock.has4SDataTIXAPI() && ns.singularity.getUpgradeHomeRamCost() < 0.2 * player.money)) {
 			// Upgrade slowly in the first run while we save money for 4S or the first batch of augmentations
 			// Assumption: We wont't join Cybersec after the first run anymore
@@ -74,6 +74,12 @@ function getPrograms(ns, player) {
 	ns.singularity.purchaseProgram("BruteSSH.exe");
 	ns.singularity.purchaseProgram("FTPCrack.exe");
 	ns.singularity.purchaseProgram("relaySMTP.exe");
+	ns.singularity.purchaseProgram("AutoLink.exe");
+	ns.singularity.purchaseProgram("ServerProfiler.exe");
+	ns.singularity.purchaseProgram("DeepscanV1.exe");
+	ns.singularity.purchaseProgram("DeepscanV2.exe");
+	ns.singularity.purchaseProgram("relaySMTP.exe");
+	if(player.money > 6e9) ns.singularity.purchaseProgram("Formulas.exe");
 	if (ns.stock.has4SDataTIXAPI()) {
 		// do not buy more before 4s data access bought
 		ns.singularity.purchaseProgram("HTTPWorm.exe");
@@ -137,13 +143,13 @@ function applyForPromotion(ns, player, corp) {
 
 function currentActionUseful(ns, player, factions) {
 	var playerControlPort = ns.getPortHandle(3); // port 2 is hack
+	var faction = ns.singularity.getCurrentWork().factionName;
+	var workType = ns.singularity.getCurrentWork().type;
 
 	if (workType == "FACTION") {
 		if (factions.has(faction)) {
-			var faction = ns.singularity.getCurrentWork().factionName;
 			var factionWork = ns.singularity.getCurrentWork().factionWorkType;
 			var factionFavor = ns.singularity.getFactionFavor(faction);
-			var workType = ns.singularity.getCurrentWork().type;
 
 			var repRemaining = factions.get(faction);
 			var repPerSecond = ns.formulas.work.factionGains(player, factionWork, factionFavor).reputation * 5;
@@ -201,11 +207,11 @@ function currentActionUseful(ns, player, factions) {
 		applyForPromotion(ns, player, Object.keys(player.jobs)[0]);
 		return true;
 	}
-	if (ns.singularity.getCurrentWork().type == "CLASS") {
-		if (ns.getHackingLevel() < studyUntilHackLevel) {
-			return true;
-		}
-	}
+	//if (ns.singularity.getCurrentWork().type == "CLASS") {
+	//	if (ns.getHackingLevel() < studyUntilHackLevel) {
+	//		return true;
+	//	}
+	//}
 	return false;
 }
 
@@ -213,7 +219,7 @@ function getFactionsForReputation(ns, player) {
 
 	var factionsWithAugmentations = new Map();
 	for (const faction of player.factions) {
-		if(faction === 'Shadows of Anarchy') continue;
+		if (faction === 'Shadows of Anarchy') continue;
 		var maxReputationRequired = maxAugmentRep(ns, faction);
 		if (ns.singularity.getFactionRep(faction) < maxReputationRequired) {
 			factionsWithAugmentations.set(faction, maxReputationRequired - ns.singularity.getFactionRep(faction));
@@ -282,15 +288,58 @@ function buyAugments(ns, player) {
 		}
 	}
 
-	ns.print("Augmentation purchase order: " + sortedAugmentations);
-	//ns.print("Current augmentation purchase cost: " + ns.nFormat(overallAugmentationCost, "0.0a"));
-	ns.print("Current augmentation purchase cost: " + ns.formatNumber(overallAugmentationCost));
+	const LAVENDER = "\u001b[38;5;147m";
+	const RED = "\u001b[31m";
+	const RESET = "\u001b[0m";
+	ns.print(`Augmentation purchase order:`);
+	for (let augment of sortedAugmentations) {
+		ns.print(`${LAVENDER}${augment[0]} : ${RESET}${ns.formatNumber(augment[1])}`);
+	}
+	ns.print(`${RED}Current augmentation purchase cost : ` + ns.formatNumber(overallAugmentationCost) + RESET);
+	ns.print('\n')
 
-	if (player.money > overallAugmentationCost) {
-		// decide when it's time to install
-		// buy augmentation list
-		// buy flux governors
-		// ns.installAugmentations(cbScript)
+	if (getFactionsForReputation(ns, player).size === 0 && player.factions.length !== 0) {
+		// stop trading and liquidate all stocks before buying augmentations
+		ns.kill("stock-trader.js", "home");
+		ns.run("sell-stocks.js");
+		ns.print(`SUCCESS Liquidating stocks.`);
+		ns.toast(`Liquidating stocks.`, "success", 5000);
+		if (player.money > overallAugmentationCost) {
+			// decide when it's time to install => when we have enough money and there are no more factions for rep
+			// buy augmentation list
+			let purchased = false;
+			let allAugmentsPurchased = false;
+			let factionsList = [];
+
+			for (let augment of sortedAugmentations) {
+				factionsList = ns.singularity.getAugmentationFactions(augment[0]);
+				if (factionsList.length === 0) {
+					ns.print(factionsList);
+					ns.print(`ERROR Could not find ${augment[0]} in any factions!`);
+					ns.toast(`Could not find ${augment[0]} in any factions!`, "error", 5000);
+					continue;
+				}
+
+				// buy from first offering faction
+				purchased = ns.singularity.purchaseAugmentation(factionsList[0], augment[0]);
+				if (purchased) {
+					ns.print(`SUCCESS Purchased ${augment[0]}.`);
+					ns.toast(`Purchased ${augment[0]}.`, "success", 5000);
+				}
+			}
+
+			if (sortedAugmentations.length === 0) allAugmentsPurchased = true;
+
+			// buy flux governors
+			if (allAugmentsPurchased) {
+				do {
+					purchased = ns.singularity.purchaseAugmentation(factionsList[0], "NeuroFlux Governor");
+				} while (purchased);
+			}
+			ns.exportGame();
+			// install and reset, run (your init script) after resetting
+			ns.singularity.installAugmentations("start.js");
+		}
 	}
 }
 
@@ -376,7 +425,7 @@ function commitCrime(ns, player, combatStatsGoal = 300) {
 	}
 
 	ns.singularity.commitCrime(bestCrime);
-	
+
 	ns.print("Crime value " + ns.formatNumber(bestCrimeValue, 0) + " for " + bestCrime);
 	return bestCrimeStats.time + 10;
 }
