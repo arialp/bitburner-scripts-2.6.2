@@ -233,7 +233,8 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 	allAugmentations.sort((a, b) => ns.singularity.getAugmentationPrice(a[0])[0] - ns.singularity.getAugmentationPrice(b[0])[0]);
 
 	for (const [augment, faction] of allAugmentations) {
-		const [cost, rep] = ns.singularity.getAugmentationPrereq(augment);
+		const [cost, rep] = [ns.singularity.getAugmentationPrice(augment), ns.singularity.getAugmentationRepReq(augment)];
+		//ns.print(`${augment}, ${faction}, ${cost}, ${rep}`);
 		if (ns.singularity.getFactionRep(faction) >= rep) {
 			augmentationsToBuy.push([augment, faction, cost]);
 		}
@@ -275,7 +276,7 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 			await ns.sleep(500);
 		}
 
-		//"start.js" should be your init script
+		//"start.js" should be you init script
 		ns.singularity.installAugmentations("start.js");
 	} else if (!goalAugmentationMet && totalCost > player.money * 10) {
 		ns.print("Cannot afford all augmentations, will reset");
