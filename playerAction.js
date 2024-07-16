@@ -95,7 +95,7 @@ function getPrograms(ns, player) {
 }
 
 function chooseAction(ns, sleepTime, player, factions) {
-	const focus = ns.singularity.isFocused();
+	var focus = ns.singularity.isFocused();
 	if (ns.getHackingLevel() < studyUntilHackLevel) {
 		ns.singularity.universityCourse("rothman university", "Study Computer Science", focus);
 	} else if (factions.size > 0) {
@@ -275,10 +275,11 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 			await ns.sleep(500);
 		}
 
-		ns.singularity.installAugmentations("augmentations.js");
+		//"start.js" should be your init script
+		ns.singularity.installAugmentations("start.js");
 	} else if (!goalAugmentationMet && totalCost > player.money * 10) {
 		ns.print("Cannot afford all augmentations, will reset");
-		ns.singularity.installAugmentations("augmentations.js");
+		ns.singularity.installAugmentations("start.js");
 	}
 }
 
