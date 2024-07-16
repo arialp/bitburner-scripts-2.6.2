@@ -3,7 +3,7 @@
 // does not require 4s Market Data TIX API Access
 
 // defines if stocks can be shorted (see BitNode 8)
-const shortAvailable = true;
+const shortAvailable = false;
 
 const commission = 100000;
 const samplingLength = 30;

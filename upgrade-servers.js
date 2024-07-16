@@ -54,8 +54,9 @@ export async function main(ns) {
 				ownedServers.push(newServer);
 				homeMoney = ns.getServerMoneyAvailable("home");
 				ns.print("Purchased Server " + newServer + " with " + maxPurchaseableRam + " RAM for " + Math.round(ramUpgradeCost / 1000000) + " m");
+				ns.tprint("Purchased Server " + newServer + " with " + maxPurchaseableRam + " RAM for " + Math.round(ramUpgradeCost / 1000000) + " m");
 			}
-
+			await ns.sleep(500);
 		}
 
 		//ns.tprint(ownedServers);
@@ -87,13 +88,14 @@ export async function main(ns) {
 						maxPurchaseableRam *= 2;
 						ramUpgradeCost = ns.getPurchasedServerCost(maxPurchaseableRam);
 						ns.print("Double RAM tier: " + maxPurchaseableRam + " GB");
-						if (homeMoney > ramUpgradeCost) {
+						if (homeMoney < ramUpgradeCost) {
 							// we should switch to a higher RAM tier but cannot afford it. Wait for more money.
 							return;
 						}
 					}
 				}
 				ns.print("Upgrade server " + upgradeServer + " RAM from " + upgradeServerRAM + " to " + maxPurchaseableRam + " for " + Math.round(ramUpgradeCost / 1000000) + " m");
+				ns.tprint("Upgrade server " + upgradeServer + " RAM from " + upgradeServerRAM + " to " + maxPurchaseableRam + " for " + Math.round(ramUpgradeCost / 1000000) + " m");
 				ns.killall(upgradeServer);
 				ns.deleteServer(upgradeServer);
 				ns.purchaseServer(upgradeServer, maxPurchaseableRam);
