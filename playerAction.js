@@ -143,13 +143,13 @@ function applyForPromotion(ns, player, corp) {
 
 function currentActionUseful(ns, player, factions) {
 	var playerControlPort = ns.getPortHandle(3); // port 2 is hack
+	var faction = ns.singularity.getCurrentWork().factionName;
+	var workType = ns.singularity.getCurrentWork().type;
 
 	if (workType == "FACTION") {
 		if (factions.has(faction)) {
-			var faction = ns.singularity.getCurrentWork().factionName;
 			var factionWork = ns.singularity.getCurrentWork().factionWorkType;
 			var factionFavor = ns.singularity.getFactionFavor(faction);
-			var workType = ns.singularity.getCurrentWork().type;
 
 			var repRemaining = factions.get(faction);
 			var repPerSecond = ns.formulas.work.factionGains(player, factionWork, factionFavor).reputation * 5;
