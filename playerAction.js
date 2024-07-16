@@ -30,11 +30,11 @@ export async function main(ns) {
 			sleepTime = chooseAction(ns, sleepTime, player, factionsForReputation);
 		}
 
-		//ns.print("WorkFactionName: " + ns.singularity.getCurrentWork().factionName);
-		//ns.print("WorkFactionDescription: " + ns.singularity.getCurrentWork().factionWorkType);
-		//ns.print("workType: " + ns.singularity.getCurrentWork().type);
-		//ns.print("companyName: " + Object.keys(player.jobs)[0]);
-		//ns.print("jobs: " + JSON.stringify(player.jobs));
+		/s.print("WorkFactionName: " + ns.singularity.getCurrentWork().factionName);
+		ns.print("WorkFactionDescription: " + ns.singularity.getCurrentWork().factionWorkType);
+		ns.print("workType: " + ns.singularity.getCurrentWork().type);
+		ns.print("companyName: " + Object.keys(player.jobs)[0]);
+		ns.print("jobs: " + JSON.stringify(player.jobs));
 		//ns.print("Corps to work for: " + getCorpsForReputation(factionsForReputation))
 		//ns.print("sleep for " + sleepTime + " ms")
 		await ns.sleep(sleepTime);
@@ -42,10 +42,11 @@ export async function main(ns) {
 }
 
 function upgradeHomeServer(ns, player) {
-	//if (!player.has4SDataTixApi && player.money > 30e9) {
-	// TODO: Consider moving this to the trading script, fits better there (and saves ram here)
-	// ns.purchase4SMarketDataTixApi();
-	//}
+	if (!ns.stock.has4SDataTIXAPI() && player.money > 30e9) {
+		// TODO: Consider moving this to the trading script, fits better there (and saves ram here)
+		ns.stock.purchase4SMarketDataTixApi();
+		ns.stock.purchase4SMarketData();
+	}
 	if (player.money > ns.singularity.getUpgradeHomeRamCost()) {
 		if (ns.singularity.getUpgradeHomeRamCost() < 2e9 
 			|| (ns.stock.has4SDataTIXAPI() && ns.singularity.getUpgradeHomeRamCost() < 0.2 * player.money)) {
@@ -53,7 +54,7 @@ function upgradeHomeServer(ns, player) {
 			// Assumption: We wont't join Cybersec after the first run anymore
 			// ToDo: Beautification: At Max Home Server Ram, it still tries to upgrade RAM -> prevent that
 			ns.print("Upgraded Home Server RAM");
-			//ns.toast("Upgraded Home Server RAM");
+			ns.toast("Upgraded Home Server RAM");
 			ns.singularity.upgradeHomeRam();
 		}
 	}
@@ -148,7 +149,6 @@ function currentActionUseful(ns, player, factions) {
 
 	if (workType == "FACTION") {
 		if (factions.has(faction)) {
-			//var repRemaining = factions.get(faction);
 			if (repRemaining > 0) {
 				// working for a faction needing more reputation for augmentations
 				if (playerControlPort.empty() && factionWork == "hacking") {
@@ -162,7 +162,6 @@ function currentActionUseful(ns, player, factions) {
 					playerControlPort.write(false);
 				}
 				// seems a cycle is .2 ms, so RepGainRate * 5 is gain per second
-				//ns.print("Reputation remaining: " + ns.nFormat(repRemaining, "0a") + " in " + ns.nFormat(repTimeRemaining / 60, "0a") + " min");
 				ns.print("Reputation remaining: " + ns.formatNumber(repRemaining, 0) + " in " + ns.formatNumber(repTimeRemaining / 60, 0) + " min");
 				return true;
 			}
@@ -193,7 +192,10 @@ function currentActionUseful(ns, player, factions) {
 
 		var reputationGoal = 200000; // 200 but some is lost when stop working ; 266667 
 		// ToDo: except fulcrum + 66.666 k and bachman not hacked
-
+		
+		// removed the ` + (player.workRepGained * 3 / 4)` from the variable below
+		// since i didn't understand what it was exactly for 
+		// and i know that `player.workRepGained` crashes the script.
 		var reputation = ns.singularity.getCompanyRep(Object.keys(player.jobs)[0]);
 		ns.print("Company reputation: " + ns.formatNumber(reputation, 0));
 		if (factions.has(Object.keys(player.jobs)[0])) {
@@ -283,7 +285,6 @@ function buyAugments(ns, player) {
 	}
 
 	ns.print("Augmentation purchase order: " + sortedAugmentations);
-	//ns.print("Current augmentation purchase cost: " + ns.nFormat(overallAugmentationCost, "0.0a"));
 	ns.print("Current augmentation purchase cost: " + ns.formatNumber(overallAugmentationCost));
 
 	if (player.money > overallAugmentationCost) {
@@ -377,7 +378,6 @@ function commitCrime(ns, player, combatStatsGoal = 300) {
 
 	ns.singularity.commitCrime(bestCrime);
 
-	//ns.print("Crime value " + ns.nFormat(bestCrimeValue, "0a") + " for " + bestCrime);
 	ns.print("Crime value " + ns.formatNumber(bestCrimeValue, 0) + " for " + bestCrime);
 	return bestCrimeStats.time + 10;
 }

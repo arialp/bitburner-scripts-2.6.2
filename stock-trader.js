@@ -80,7 +80,6 @@ function tendStocks(ns) {
 			if (money > 500 * commission) {
 				const sharesToBuy = Math.min(stock.maxShares, Math.floor((money - commission) / stock.bidPrice));
 				if (ns.stock.short(stock.sym, sharesToBuy) > 0) {
-					//ns.print(`WARN ${stock.summary} SHORT BOUGHT ${ns.nFormat(sharesToBuy, "$0.0a")}`);
 					ns.print(`WARN ${stock.summary} SHORT BOUGHT \$${ns.formatNumber(sharesToBuy)}`);
 				}
 			}
