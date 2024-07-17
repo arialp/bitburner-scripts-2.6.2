@@ -28,8 +28,8 @@ export async function main(ns) {
 		ns.print("\n");
 
 		getPrograms(ns, player);
-		let joinCount = joinFactions(ns);
-		await buyAugments(ns, player, augmentationCostMultiplier, joinCount);
+		joinFactions(ns);
+		await buyAugments(ns, player, augmentationCostMultiplier);
 		upgradeHomeServer(ns, player);
 
 		const factionsForReputation = getFactionsForReputation(ns, player);
@@ -138,7 +138,8 @@ function chooseAction(ns, sleepTime, player, factions) {
 			ns.print(`Could not perform intended action: ${faction} -> ${workType}`);
 		}
 	} else if (player.skills.hacking >= 250) {
-		const corpsToWorkFor = getCorpsForReputation(ns, factions);
+		const corpsToWorkFor = getCorpsForReputation(ns, player);
+		//ns.print(corpsToWorkFor);
 		if (corpsToWorkFor.length > 0) {
 			applyForPromotion(ns, corpsToWorkFor[0]);
 			ns.print(`INFO Start working for ${corpsToWorkFor[0]}`);
@@ -210,14 +211,16 @@ function currentActionUseful(ns, player, factions) {
 			playerControlPort.write(false);
 		}
 	}
-	if (currentWork && currentWork.type == "COMPANY" && Object.keys(player.jobs)[0] != "") {
+	if (currentWork && currentWork.type == "COMPANY" && currentWork.companyName !== "") {
 		const reputationGoal = 200000;
-		const reputation = ns.singularity.getCompanyRep(Object.keys(player.jobs)[0]);
-		ns.print(`Company reputation: ${ns.formatNumber(reputation, 0)}`);
-		if (factions.has(Object.keys(player.jobs)[0])) {
+		const reputation = ns.singularity.getCompanyRep(currentWork.companyName);
+		const corpsToWorkFor = getCorpsForReputation(ns, player);
+		ns.print(`Company reputation: ${ns.formatNumber(reputation, 3)}`);
+		if (!corpsToWorkFor.includes(currentWork.companyName)) {
+			// if we have unlocked company faction, stop working for company
 			return false;
 		}
-		applyForPromotion(ns, Object.keys(player.jobs)[0]);
+		applyForPromotion(ns, currentWork.companyName);
 		return true;
 	}
 	if (currentWork && currentWork.type == "CLASS") {
@@ -247,18 +250,19 @@ function getFactionsForReputation(ns, player) {
 }
 
 /** 
- * Returns corporations that provide reputation for factions.
+ * Returns corporations the player hasn't unlocked its faction yet.
  * @param {NS} ns
  * @param {Map} factions 
  * @returns {string[]}
  **/
-function getCorpsForReputation(ns, factions) {
+function getCorpsForReputation(ns, player) {
 	const corpsWithoutFaction = [];
 	for (const corp of megaCorps) {
-		if (!factions.has(corp)) {
+		if (!player.factions.includes(corp)) {
 			corpsWithoutFaction.push(corp);
 		}
 	}
+	//ns.print(corpsWithoutFaction);
 	return corpsWithoutFaction;
 }
 
@@ -268,7 +272,7 @@ function getCorpsForReputation(ns, factions) {
  * @param {Player} player
  * @param {number} augmentationCostMultiplier 
  **/
-async function buyAugments(ns, player, augmentationCostMultiplier, joinCount) {
+async function buyAugments(ns, player, augmentationCostMultiplier) {
 	const playerFactions = player.factions;
 	const purchasedAugmentations = ns.singularity.getOwnedAugmentations(true);
 	const augmentationsToBuy = [];
@@ -334,8 +338,8 @@ async function buyAugments(ns, player, augmentationCostMultiplier, joinCount) {
 	}
 
 	// is goal augmentation's requirements fulfilled?
-	const goalAugmentationMet = goalAugmentation === "" ? true : augmentationsToBuy.some(aug => aug[0] === goalAugmentation);
-	const favorToDonate = 150;
+	const goalAugmentationMet = goalAugmentation === "" ? false : augmentationsToBuy.some(aug => aug[0] === goalAugmentation);
+	const favorToDonate = ns.getFavorToDonate();
 
 	ns.print(`Augmentation purchase order:`);
 
@@ -349,7 +353,7 @@ async function buyAugments(ns, player, augmentationCostMultiplier, joinCount) {
 
 	for (let augment of augmentationsToBuy) {
 		if (augment[0] === goalAugmentation) continue;
-		ns.print(`${LAVENDER}${augment[0]} : ${RESET}${ns.formatNumber(augment[2] * augmentationCostMultiplier)}`);
+		ns.print(`${LAVENDER}${augment[0]} : ${RESET}${ns.formatNumber(augment[2])}`);
 	}
 	ns.print(`${RED}Current augmentation purchase cost : ` + ns.formatNumber(totalCost) + RESET);
 	ns.print('\n');
@@ -386,7 +390,7 @@ async function buyAugments(ns, player, augmentationCostMultiplier, joinCount) {
 		}
 	};
 
-	if ((goalAugmentationMet || hasEnoughFavor(augmentationsToBuy)) && player.money > totalCost && !purchasedAugmentations?.includes("The Red Pill")) {
+	if ((goalAugmentationMet || hasEnoughFavor(augmentationsToBuy)) && player.money > totalCost) {
 		for (const [augment, faction, cost] of augmentationsToBuy) {
 			if (augmentationsToBuy.length <= 0) break; //failsafe: this should not run but just in case
 
@@ -512,15 +516,12 @@ function commitCrime(ns, player, combatStatsGoal = 300) {
  **/
 function joinFactions(ns) {
 	const newFactions = ns.singularity.checkFactionInvitations();
-	let joinCount = 0;
 	for (const faction of newFactions) {
-		if (!cityFactions.includes(faction) && maxAugmentRep(ns, faction)) {
+		if (!cityFactions.includes(faction)) {
 			ns.singularity.joinFaction(faction);
-			joinCount++;
 			ns.print("Joined " + faction);
 		}
 	}
-	return joinCount;
 }
 
 /** @param {NS} ns **/
