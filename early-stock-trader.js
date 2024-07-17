@@ -8,6 +8,7 @@ const shortAvailable = false;
 const commission = 100000;
 const samplingLength = 30;
 
+/** @param {NS} ns */
 function predictState(samples) {
   const limits = [null, null, null, null, 5, 6, 6, 7, 8, 8, 9, 10, 10, 11, 11, 12, 12, 13, 14, 14, 15, 15, 16, 16, 17, 17, 18, 19, 19, 20];
   let inc = 0;
@@ -31,6 +32,7 @@ function predictState(samples) {
   return 0;
 }
 
+/** @param {NS} ns */
 function format(money) {
   const prefixes = ["", "k", "m", "b", "t", "q"];
   for (let i = 0; i < prefixes.length; i++) {
@@ -53,6 +55,7 @@ function posNegRatio(samples) {
   return Math.round(100 * (2 * pos / samples.length - 1));
 }
 
+/** @param {NS} ns */
 export async function main(ns) {
   ns.disableLog("ALL");
   let symLastPrice = {};
@@ -110,7 +113,7 @@ export async function main(ns) {
         const cost = longShares * longPrice;
         const profit = longShares * (bidPrice - longPrice) - 2 * commission;
         if (state < 0) {
-          const sellPrice = ns.stock.sell(sym, longShares);
+          const sellPrice = ns.stock.sellStock(sym, longShares);
           if (sellPrice > 0) {
             sold = true;
             ns.print(`INFO SOLD (long) ${sym}. Profit: ${format(profit)}`);
@@ -144,13 +147,13 @@ export async function main(ns) {
       if (money > commission * 1000) {
         if (state > 0 && !sold) {
           const sharesToBuy = Math.min(ns.stock.getMaxShares(sym), Math.floor((money - commission) / askPrice));
-          if (ns.stock.buy(sym, sharesToBuy) > 0) {
+          if (ns.stock.buyStock(sym, sharesToBuy) > 0) {
             longStocks.add(sym);
             ns.print(`INFO BOUGHT (long) ${sym}.`);
           }
         } else if (state < 0 && !sold && shortAvailable) {
           const sharesToBuy = Math.min(ns.stock.getMaxShares(sym), Math.floor((money - commission) / bidPrice));
-          if (ns.stock.short(sym, sharesToBuy) > 0) {
+          if (ns.stock.buyShort(sym, sharesToBuy) > 0) {
             shortStocks.add(sym);
             ns.print(`INFO BOUGHT (short) ${sym}.`);
           }
@@ -181,6 +184,7 @@ export async function main(ns) {
   }
 }
 
+/** @param {NS} ns */
 function getSymServer(sym) {
   const symServer = {
     "WDS": "",

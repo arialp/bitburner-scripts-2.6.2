@@ -212,6 +212,7 @@ export async function main(ns) {
 	}
 }
 
+/** @param {NS} ns */
 function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
 	var attacksLaunched = 0;
 	for (let target of targets) {
@@ -512,6 +513,7 @@ function manageAndHack(ns, freeRams, servers, targets, growStocks, hackStocks) {
 	return attacksLaunched;
 }
 
+/** @param {NS} ns */
 function xpWeaken(ns, freeRams, servers, targets) {
 
 	// let weken threads for XP farming sleep for this amount of ms
@@ -540,6 +542,7 @@ function xpWeaken(ns, freeRams, servers, targets) {
 	}
 }
 
+/** @param {NS} ns */
 function weakenXPgainCompare(ns, playerHackingLevel, target) {
 	// not actual XP, but the factor to calculate it
 	const xpPerWeaken = ((playerHackingLevel - ns.getServerRequiredHackingLevel(target)) / playerHackingLevel);
@@ -549,6 +552,7 @@ function weakenXPgainCompare(ns, playerHackingLevel, target) {
 
 // find some place to run the script with given amount of threads
 // returns true means script was executed, false means it didnt
+/** @param {NS} ns */
 function findPlaceToRun(ns, script, threads, freeRams, target, sleepTime, manipulateStock = false) {
 	while (freeRams.length > 0) {
 		// try with first availiable host
@@ -586,6 +590,7 @@ function findPlaceToRun(ns, script, threads, freeRams, target, sleepTime, manipu
 }
 
 // check whether there is already an attack against a target ongoing
+/** @param {NS} ns */
 function attackOngoing(ns, servers, target) {
 	var weakSleep = 0;
 	for (let server of servers.values()) {
@@ -612,6 +617,7 @@ function attackOngoing(ns, servers, target) {
 }
 
 // check whether there is already an attack against a target ongoing
+/** @param {NS} ns */
 function xpAttackOngoing(ns, servers, target, weakSleep) {
 	for (let server of servers.values()) {
 		let weakenRunning = ns.isRunning(weakenScriptName, server, target, weakSleep);
@@ -625,6 +631,7 @@ function xpAttackOngoing(ns, servers, target, weakSleep) {
 }
 
 // filter and sort the list for hackable servers
+/** @param {NS} ns */
 function getHackable(ns, servers) {
 
 	var sortedServers = [...servers.values()].filter(server => ns.getServerMaxMoney(server) > 100000 &&
@@ -650,6 +657,7 @@ function getHackable(ns, servers) {
 }
 
 // filter the list for servers where we can run script on
+/** @param {NS} ns */
 function getFreeRam(ns, servers) {
 	var serverRams = [];
 	var overallFreeRam = 0;
@@ -683,6 +691,7 @@ function getFreeRam(ns, servers) {
 }
 
 // scan all servers from home and nuke them if we can
+/** @param {NS} ns */
 async function scanAndNuke(ns) {
 	let servers = new Set(["home"]);
 	scanAll(ns, "home", servers);
@@ -724,6 +733,7 @@ async function scanAndNuke(ns) {
 	return accessibleServers;
 }
 
+/** @param {NS} ns */
 function scanAll(ns, host, servers) {
 	var hosts = ns.scan(host);
 	for (let i = 0; i < hosts.length; i++) {
@@ -734,6 +744,7 @@ function scanAll(ns, host, servers) {
 	}
 }
 
+/** @param {NS} ns */
 export function getStockPortContent(ns, portNumber, content) {
 	var portHandle = ns.getPortHandle(portNumber);
 	var firstPortElement = portHandle.peek();

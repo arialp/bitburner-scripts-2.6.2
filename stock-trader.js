@@ -3,15 +3,12 @@
 // requires 4s Market Data TIX API Access
 
 // defines if stocks can be shorted (see BitNode 8)
-let shortAvailable;
+const shortAvailable = false;
 
 const commission = 100000;
 /** @param {NS} ns */
 export async function main(ns) {
 	ns.disableLog("ALL");
-
-	const sourceFiles = ns.singularity.getOwnedSourceFiles();
-	(sourceFiles.some(sourcefile => sourcefile.n === 8)) ? shortAvailable = true : shortAvailable = false;
 
 	while (true) {
 		tendStocks(ns);
@@ -19,6 +16,7 @@ export async function main(ns) {
 	}
 }
 
+/** @param {NS} ns */
 function tendStocks(ns) {
 	ns.print("");
 	var stocks = getAllStocks(ns);
@@ -107,6 +105,7 @@ function tendStocks(ns) {
 	}
 }
 
+/** @param {NS} ns */
 export function getAllStocks(ns) {
 	// make a lookup table of all stocks and all their properties
 	const stockSymbols = ns.stock.getSymbols();
@@ -143,6 +142,7 @@ export function getAllStocks(ns) {
 	return stocks;
 }
 
+/** @param {NS} ns */
 function getSymServer(sym) {
 	const symServer = {
 		"WDS": "",
