@@ -30,7 +30,7 @@ export async function main(ns) {
 		getPrograms(ns, player);
 		let joinCount = joinFactions(ns);
 		await buyAugments(ns, player, augmentationCostMultiplier, joinCount);
-		await upgradeHomeServer(ns, player);
+		upgradeHomeServer(ns, player);
 
 		const factionsForReputation = getFactionsForReputation(ns, player);
 		ns.print("Factions for Reputation: " + [...factionsForReputation.keys()]);
