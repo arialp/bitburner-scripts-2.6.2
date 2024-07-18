@@ -3,7 +3,7 @@
 // does not require 4s Market Data TIX API Access
 
 // defines if stocks can be shorted (see BitNode 8)
-const shortAvailable = false;
+const shortAvailable = true;
 
 const commission = 100000;
 const samplingLength = 30;
@@ -30,19 +30,6 @@ function predictState(samples) {
     }
   }
   return 0;
-}
-
-/** @param {NS} ns */
-function format(money) {
-  const prefixes = ["", "k", "m", "b", "t", "q"];
-  for (let i = 0; i < prefixes.length; i++) {
-    if (Math.abs(money) < 1000) {
-      return `${Math.floor(money * 10) / 10}${prefixes[i]}`;
-    } else {
-      money /= 1000;
-    }
-  }
-  return `${Math.floor(money * 10) / 10}${prefixes[prefixes.length - 1]}`;
 }
 
 function posNegDiff(samples) {
@@ -116,11 +103,11 @@ export async function main(ns) {
           const sellPrice = ns.stock.sellStock(sym, longShares);
           if (sellPrice > 0) {
             sold = true;
-            ns.print(`INFO SOLD (long) ${sym}. Profit: ${format(profit)}`);
+            ns.print(`INFO SOLD (long) ${sym}. Profit: ${ns.formatNumber(profit)}`);
           }
         } else {
           longStocks.add(sym);
-          ns.print(`${sym} (${ratio}): ${format(profit + cost)} / ${format(profit)} (${Math.round(profit / cost * 10000) / 100}%)`);
+          ns.print(`${sym} (${ratio}): ${ns.formatNumber(profit + cost)} / ${ns.formatNumber(profit)} (${Math.round(profit / cost * 10000) / 100}%)`);
         }
       }
       else if (shortShares > 0) {
@@ -130,11 +117,11 @@ export async function main(ns) {
           const sellPrice = ns.stock.sellShort(sym, shortShares);
           if (sellPrice > 0) {
             sold = true;
-            ns.print(`INFO SOLD (short) ${sym}. Profit: ${format(profit)}`);
+            ns.print(`INFO SOLD (short) ${sym}. Profit: ${ns.formatNumber(profit)}`);
           }
         } else {
           shortStocks.add(sym);
-          ns.print(`${sym} (${ratio}): ${format(profit + cost)} / ${format(profit)} (${Math.round(profit / cost * 10000) / 100}%)`);
+          ns.print(`${sym} (${ratio}): ${ns.formatNumber(profit + cost)} / ${ns.formatNumber(profit)} (${Math.round(profit / cost * 10000) / 100}%)`);
         }
       }
       else if (state > 0) {
