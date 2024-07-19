@@ -312,22 +312,35 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 
 	// Set goal as the highest rep augment among joined factions.
 	let allAugmentations = [];
+	let uniqueAugments = new Set();
+
 	for (const faction of playerFactions) {
+
 		if (faction === 'Shadows of Anarchy') continue;
+
 		const augmentations = ns.singularity.getAugmentationsFromFaction(faction).filter(augment => !ignoreFactionAugs.get(faction)?.includes(augment));
+
 		for (const augment of augmentations) {
+
 			if (!purchasedAugmentations.includes(augment) && hasPrereqs(purchasedAugmentations, ns.singularity.getAugmentationPrereq(augment))) {
 				const repReq = ns.singularity.getAugmentationRepReq(augment);
+
 				if (repReq > maxRepRequired) {
 					// Determine the highest rep requirement
 					maxRepRequired = repReq;
 					goalAugmentation = augment;
 					goalAugmentationFaction = faction;
 				}
-				allAugmentations.push([augment, faction, repReq]);
+
+				if (!uniqueAugments.has(augment)) {
+					uniqueAugments.add(augment);
+					allAugmentations.push([augment, faction, repReq]);
+				}
 			}
 		}
 	}
+
+
 
 
 	allAugmentations.sort((a, b) => b[2] - a[2]);

@@ -11,7 +11,7 @@ export async function main(ns) {
 	if (maxPurchaseableRam > ramLimit) {
 		maxPurchaseableRam = ramLimit;
 	}
-	ns.print("Initial RAM tier: " + maxPurchaseableRam + " GB");
+	ns.print("Initial RAM tier: " + ns.formatRam(maxPurchaseableRam));
 	while (notAllServersMaxed) {
 		var homeMoney = ns.getServerMoneyAvailable("home");
 		var ownedServers = ns.getPurchasedServers();
@@ -53,8 +53,8 @@ export async function main(ns) {
 				const newServer = ns.purchaseServer("pserv-" + ownedServers.length, maxPurchaseableRam);
 				ownedServers.push(newServer);
 				homeMoney = ns.getServerMoneyAvailable("home");
-				ns.print("Purchased Server " + newServer + " with " + maxPurchaseableRam + " RAM for " + Math.round(ramUpgradeCost / 1000000) + " m");
-				ns.tprint("Purchased Server " + newServer + " with " + maxPurchaseableRam + " RAM for " + Math.round(ramUpgradeCost / 1000000) + " m");
+				ns.print("Purchased Server " + newServer + " with " + ns.formatRam(maxPurchaseableRam) + " RAM for " + ns.formatNumber(ramUpgradeCost));
+				ns.tprint("Purchased Server " + newServer + " with " + ns.formatRam(maxPurchaseableRam) + " RAM for " + ns.formatNumber(ramUpgradeCost));
 			}
 			await ns.sleep(500);
 		}
@@ -87,15 +87,15 @@ export async function main(ns) {
 						// 		and "baiting" threads to the high RAM servers so that the last small ones have low utilization. 
 						maxPurchaseableRam *= 2;
 						ramUpgradeCost = ns.getPurchasedServerCost(maxPurchaseableRam);
-						ns.print("Double RAM tier: " + maxPurchaseableRam + " GB");
+						ns.print("Double RAM tier: " + ns.formatRam(maxPurchaseableRam));
 						if (homeMoney < ramUpgradeCost) {
 							// we should switch to a higher RAM tier but cannot afford it. Wait for more money.
 							return;
 						}
 					}
 				}
-				ns.print("Upgrade server " + upgradeServer + " RAM from " + upgradeServerRAM + " to " + maxPurchaseableRam + " for " + Math.round(ramUpgradeCost / 1000000) + " m");
-				ns.tprint("Upgrade server " + upgradeServer + " RAM from " + upgradeServerRAM + " to " + maxPurchaseableRam + " for " + Math.round(ramUpgradeCost / 1000000) + " m");
+				ns.print("Upgrade server " + upgradeServer + " RAM from " + ns.formatRam(upgradeServerRAM) + " to " + ns.formatRam(maxPurchaseableRam) + " for " + ns.formatNumber(ramUpgradeCost));
+				ns.tprint("Upgrade server " + upgradeServer + " RAM from " + ns.formatRam(upgradeServerRAM) + " to " + ns.formatRam(maxPurchaseableRam) + " for " + ns.formatNumber(ramUpgradeCost));
 				ns.killall(upgradeServer);
 				ns.deleteServer(upgradeServer);
 				ns.purchaseServer(upgradeServer, maxPurchaseableRam);
