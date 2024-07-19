@@ -57,15 +57,18 @@ function upgradeHomeServer(ns, player) {
 		ns.stock.purchase4SMarketDataTixApi();
 		ns.stock.purchase4SMarketData();
 	}
-	if (player.money > ns.singularity.getUpgradeHomeRamCost()) {
-		if (ns.singularity.getUpgradeHomeRamCost() < 2e9 || (has4STIX && ns.singularity.getUpgradeHomeRamCost() < 0.75 * player.money)) {
+	const balance = player.money + ns.readPort(4);
+	if (balance > ns.singularity.getUpgradeHomeRamCost() && ns.getServerMaxRam("home") < Math.pow(2, 30)) {
+		if (ns.singularity.getUpgradeHomeRamCost() < 2e9 || (has4STIX && ns.singularity.getUpgradeHomeRamCost() < 0.5 * balance)) {
+			if (ns.getPortHandle(5).empty()) ns.writePort(5, ns.singularity.getUpgradeHomeRamCost());
 			ns.singularity.upgradeHomeRam();
 			ns.print(`INFO Upgraded home RAM to ${ns.formatRam(ns.getServerMaxRam("home"))}`);
 			ns.toast(`Upgraded home RAM to ${ns.formatRam(ns.getServerMaxRam("home"))}`, `info`);
 		}
 	}
-	if (player.money > ns.singularity.getUpgradeHomeCoresCost() && ns.getServer("home").cpuCores < 8) {
-		if (has4STIX && ns.singularity.getUpgradeHomeCoresCost() < 0.5 * player.money) {
+	if (balance > ns.singularity.getUpgradeHomeCoresCost() && ns.getServer("home").cpuCores < 8) {
+		if (has4STIX && ns.singularity.getUpgradeHomeCoresCost() < 0.25 * balance) {
+			if (ns.getPortHandle(5).empty()) ns.writePort(5, ns.singularity.getUpgradeHomeCoresCost());
 			ns.singularity.upgradeHomeCores();
 			ns.print(`INFO Upgraded home RAM to ${ns.getServer("home").cpuCores}`);
 			ns.toast(`Upgraded home RAM to ${ns.getServer("home").cpuCores}`, `info`);
@@ -106,7 +109,8 @@ function getPrograms(ns, player) {
 		programs.push("HTTPWorm.exe", "SQLInject.exe");
 	}
 	for (const program of programs) {
-		if (!ns.fileExists(program) && player.money > programCosts[program]) {
+		if (!ns.fileExists(program) && player.money + ns.readPort(4) > programCosts[program]) {
+			if (ns.getPortHandle(5).empty()) ns.writePort(5, programCosts[program]);
 			ns.singularity.purchaseProgram(program);
 			ns.print(`INFO Purchased ${program}`);
 			ns.toast(`Purchased ${program}`, `info`);
@@ -280,7 +284,6 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 	const playerFactions = player.factions;
 	const stockValuePort = ns.getPortHandle(4); // port 4 for reading stock-trader.js announcement
 	const stockActionPort = ns.getPortHandle(5); // port 5 for sending commands to stock-trader.js
-	const manualResetPort = ns.getPortHandle(6); // port 6 for manual player initiated reset trigger
 	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.read();
 	const balance = player.money + stockValue;
 	const purchasedAugmentations = ns.singularity.getOwnedAugmentations(true);

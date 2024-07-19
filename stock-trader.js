@@ -195,40 +195,6 @@ export function getAllStocks(ns) {
 }
 
 /** @param {NS} ns */
-function liquidateStocks(ns) {
-	let totalMoneyGained = 0;
-	let positionsRemaining = false;
-
-	for (let stock of stocks) {
-		// Sell all short shares
-		if (stock.shortShares > 0) {
-			let moneyGained = ns.stock.sellShort(stock.sym, stock.shortShares);
-			totalMoneyGained += moneyGained;
-			stock.shortShares = 0;
-		}
-
-		// Sell all long shares
-		if (stock.longShares > 0) {
-			let moneyGained = ns.stock.sellStock(stock.sym, stock.longShares);
-			totalMoneyGained += moneyGained;
-			stock.longShares = 0;
-		}
-
-		// Check if there are any remaining positions
-		if (stock.shortShares > 0 || stock.longShares > 0) {
-			positionsRemaining = true;
-		}
-	}
-
-	// Return length of stocks array multiplied by -1 if positions are remaining
-	if (positionsRemaining) {
-		return stocks.length * -1;
-	}
-
-	return totalMoneyGained;
-}
-
-/** @param {NS} ns */
 function getSymServer(sym) {
 	const symServer = {
 		"WDS": "",
