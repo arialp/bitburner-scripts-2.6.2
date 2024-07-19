@@ -54,7 +54,7 @@ export async function main(ns) {
 function upgradeHomeServer(ns, player) {
 	const stockValuePort = ns.getPortHandle(4);
 	const stockActionPort = ns.getPortHandle(5);
-	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.read();
+	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.peek();
 	const balance = player.money + stockValue;
 	const has4STIX = ns.stock.has4SDataTIXAPI()
 	if (!has4STIX && player.money > 40e9) {
@@ -87,7 +87,7 @@ function upgradeHomeServer(ns, player) {
 function getPrograms(ns, player) {
 	const stockValuePort = ns.getPortHandle(4);
 	const stockActionPort = ns.getPortHandle(5);
-	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.read();
+	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.peek();
 	const balance = player.money + stockValue;
 	const programCosts = {
 		"BruteSSH.exe": 500e3,
@@ -117,7 +117,7 @@ function getPrograms(ns, player) {
 		programs.push("HTTPWorm.exe", "SQLInject.exe");
 	}
 	for (const program of programs) {
-		if (!ns.fileExists(program) && balance > programCosts[program]) {
+		if (!ns.fileExists(program) && balance * 0.5 > programCosts[program]) {
 			if (stockActionPort.empty()) stockActionPort.write(programCosts[program]);
 			ns.singularity.purchaseProgram(program);
 			ns.print(`INFO Purchased ${program}`);
@@ -206,7 +206,7 @@ function currentActionUseful(ns, player, factions) {
 				} else if (playerControlPort.empty()) {
 					playerControlPort.write(false);
 				}
-				ns.print(`INFO Reputation remaining: ${ns.formatNumber(repRemaining, 3)} in ${ns.formatNumber(repTimeRemaining / 60, 0)} min`);
+				ns.print(`INFO Reputation remaining: ${ns.formatNumber(repRemaining, 3)} in ${ns.formatNumber(repTimeRemaining / 60, 0, 100000)} min`);
 				return true;
 			} else {
 				ns.print(`INFO Max reputation @${faction}`);
@@ -293,7 +293,7 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 	const stockValuePort = ns.getPortHandle(4); // port 4 for reading stock-trader.js announcement
 	const stockActionPort = ns.getPortHandle(5); // port 5 for sending commands to stock-trader.js
 	const manualResetPort = ns.getPortHandle(6); // port 6 for manual player initiated reset trigger
-	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.read();
+	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.peek();
 	const balance = player.money + stockValue;
 	const purchasedAugmentations = ns.singularity.getOwnedAugmentations(true);
 	const augmentationsToBuy = [];
@@ -412,6 +412,7 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 			return moneyNeeded;
 		} else {
 			// Player doesn't have formulas, return a large enough value to ensure it doesn't crash
+			ns.print(`WARN Formulas.exe not found! Cannot calculate donation goal.`);
 			return balance + 1e9;
 		}
 	};
@@ -423,7 +424,7 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 			//ns.print(requiredRep)
 			//ns.print(moneyNeeded)
 			ns.print(`Donation Goal: ${ns.formatNumber(moneyNeeded)}`);
-			if (balance >= moneyNeeded) {
+			if (balance * 0.5 >= moneyNeeded) {
 				if (stockActionPort.empty()) {
 					stockActionPort.write(moneyNeeded);
 				}
@@ -443,7 +444,7 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 		stockActionPort.clear(); // override any previous commands
 		stockActionPort.write('liq'); // send signal to liquidate stocks
 		await ns.sleep(5000); // time for stock trader to send data
-		let liquidate = stockValuePort.peek() === "NULL DATA PORT" ? 0 : stockValuePort.read();
+		let liquidate = stockValuePort.peek() === "NULL DATA PORT" ? 0 : stockValuePort.peek();
 		if (liquidate < 0) { ns.toast(`Couldn't liquidate ${-liquidate} stocks. Aborting.`, "error", 5000); return; }
 		if (liquidate = 0) ns.toast(`Assuming portfolio is empty. Continuing.`, "info", 5000);
 		if (liquidate > 0) ns.toast(`Sold each stock for ${ns.formatNumber(liquidate)}`, "success", 5000);

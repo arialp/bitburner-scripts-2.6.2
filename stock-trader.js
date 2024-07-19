@@ -109,6 +109,9 @@ function tendStocks(ns) {
 
 	if (stockValuePort.empty()) {
 		stockValuePort.write(overallValue);
+	} else {
+		stockValuePort.clear();
+		stockValuePort.write(overallValue);
 	}
 
 	if (stockActionPort.peek() === 'liq') { // proceed to stop trading and liquidate
