@@ -22,7 +22,7 @@ export async function main(ns) {
 		ns.clearLog();
 		ns.print("");
 
-		let sleepTime = 5000;
+		let sleepTime = 4500;
 		player = ns.getPlayer();
 
 		ns.print("\n");
@@ -220,6 +220,10 @@ function currentActionUseful(ns, player, factions) {
 			// if we have unlocked company faction, stop working for company
 			return false;
 		}
+		if (factions.size > 0) {
+			// prioritize factions for rep
+			return false;
+		}
 		applyForPromotion(ns, currentWork.companyName);
 		return true;
 	}
@@ -274,6 +278,11 @@ function getCorpsForReputation(ns, player) {
  **/
 async function buyAugments(ns, player, augmentationCostMultiplier) {
 	const playerFactions = player.factions;
+	const stockValuePort = ns.getPortHandle(4); // port 4 for reading stock-trader.js announcement
+	const stockActionPort = ns.getPortHandle(5); // port 5 for sending commands to stock-trader.js
+	const manualResetPort = ns.getPortHandle(6); // port 6 for manual player initiated reset trigger
+	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.read();
+	const balance = player.money + stockValue;
 	const purchasedAugmentations = ns.singularity.getOwnedAugmentations(true);
 	const augmentationsToBuy = [];
 	const LAVENDER = "\u001b[38;5;147m";
@@ -282,6 +291,7 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 	const RESET = "\u001b[0m";
 
 	let goalAugmentation = "";
+	let goalAugmentationFaction = "";
 	let maxRepRequired = 0;
 
 	const hasPrereqs = (purchasedAugmentations, augmentationPrereqs) => {
@@ -300,15 +310,13 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 					// Determine the highest rep requirement
 					maxRepRequired = repReq;
 					goalAugmentation = augment;
+					goalAugmentationFaction = faction;
 				}
 				allAugmentations.push([augment, faction, repReq]);
 			}
 		}
 	}
 
-	if (goalAugmentation == "" && !purchasedAugmentations?.includes("The Red Pill")) {
-		var choice = await ns.prompt(`Goal augmentation not found. Proceed to reset?`, { type: "boolean", choices: ["Yes", "No"] });
-	}
 
 	allAugmentations.sort((a, b) => b[2] - a[2]);
 
@@ -350,6 +358,7 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 		goalPrice = 0;
 	}
 	ns.print(`${AQUA}Goal Augmentation : ${goalAugmentation} : ${ns.formatNumber(goalPrice)}`)
+	ns.print(`${LAVENDER}/__________________Cart__________________\\`);
 
 	for (let augment of augmentationsToBuy) {
 		if (augment[0] === goalAugmentation) continue;
@@ -365,12 +374,12 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 		} else if (typeof data === "string") {
 			if (data === "") return false;
 			faction = data;
-			return (
-				faction
-					? (ns.singularity.getFactionFavor(faction) + ns.singularity.getFactionFavorGain(faction)) >= favorToDonate
-					: false
-			);
 		};
+		return (
+			faction
+				? (ns.singularity.getFactionFavor(faction) + ns.singularity.getFactionFavorGain(faction)) >= favorToDonate
+				: false
+		);
 	}
 
 	const getMoneyForReputation = (faction, requiredRep) => {
@@ -380,35 +389,50 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 			let moneyNeeded = 1e7;
 			let repAfter = ns.formulas.reputation.repFromDonation(moneyNeeded, player) + repNow;
 			while (requiredRep > repAfter) {
-				moneyNeeded *= 10; //start with 100mil (150 rep for 150 favor)
+				moneyNeeded *= 1.5;
 				repAfter = ns.formulas.reputation.repFromDonation(moneyNeeded, player) + repNow;
 			}
+			//ns.print(repAfter)
 			return moneyNeeded;
 		} else {
 			// Player doesn't have formulas, return a large enough value to ensure it doesn't crash
-			return player.money + 1e9;
+			return balance + 1e9;
 		}
 	};
 
-	if ((goalAugmentationMet || hasEnoughFavor(augmentationsToBuy)) && player.money > totalCost) {
-		for (const [augment, faction, cost] of augmentationsToBuy) {
-			if (augmentationsToBuy.length <= 0) break; //failsafe: this should not run but just in case
-
-			if (ns.singularity.getFactionRep(faction) < ns.singularity.getAugmentationRepReq(augment) && hasEnoughFavor(faction)) {
-				const requiredRep = ns.singularity.getAugmentationRepReq(augment);
-				const moneyNeeded = getMoneyForReputation(faction, requiredRep);
-
-				if (player.money >= moneyNeeded) {
-					if (ns.singularity.donateToFaction(faction, moneyNeeded)) {
-						ns.print(`SUCCESS Donated ${ns.formatNumber(moneyNeeded)} to ${faction}`);
-						ns.toast(`Donated ${ns.formatNumber(moneyNeeded)} to ${faction}`, "success", 5000);
-					} else {
-						ns.print(`ERROR Could not donate to ${faction}!`);
-						ns.toast(`Could not donate to ${faction}!`, "error", 5000);
-					}
+	if (goalAugmentation !== "") {
+		if (ns.singularity.getFactionRep(goalAugmentationFaction) < ns.singularity.getAugmentationRepReq(goalAugmentation) && hasEnoughFavor(goalAugmentationFaction)) {
+			const requiredRep = ns.singularity.getAugmentationRepReq(goalAugmentation);
+			const moneyNeeded = getMoneyForReputation(goalAugmentationFaction, requiredRep);
+			//ns.print(requiredRep)
+			//ns.print(moneyNeeded)
+			ns.print(`Donation Goal: ${ns.formatNumber(moneyNeeded)}`);
+			if (balance >= moneyNeeded) {
+				if (stockActionPort.empty()) {
+					stockActionPort.write(moneyNeeded);
+				}
+				if (ns.singularity.donateToFaction(goalAugmentationFaction, moneyNeeded)) {
+					ns.print(`SUCCESS Donated ${ns.formatNumber(moneyNeeded)} to ${goalAugmentationFaction}`);
+					ns.toast(`Donated ${ns.formatNumber(moneyNeeded)} to ${goalAugmentationFaction}`, "success", 5000);
+				} else {
+					ns.print(`ERROR Could not donate to ${goalAugmentationFaction}!`);
+					ns.toast(`Could not donate to ${goalAugmentationFaction}!`, "error", 5000);
 				}
 			}
+		}
+	}
 
+	if (goalAugmentationMet && balance > totalCost || manualReset) {
+		if (augmentationsToBuy.length <= 0) return; //failsafe: this should not run but just in case
+		stockActionPort.clear(); // override any previous commands
+		stockActionPort.write('liq'); // send signal to liquidate stocks
+		await ns.sleep(5000); // time for stock trader to send data
+		let liquidate = stockValuePort.peek() === "NULL DATA PORT" ? 0 : stockValuePort.read();
+		if (liquidate < 0) { ns.toast(`Couldn't liquidate ${-liquidate} stocks. Aborting.`, "error", 5000); return; }
+		if (liquidate = 0) ns.toast(`Assuming portfolio is empty. Continuing.`, "info", 5000);
+		if (liquidate > 0) ns.toast(`Sold each stock for ${ns.formatNumber(liquidate)}`, "success", 5000);
+
+		for (const [augment, faction, cost] of augmentationsToBuy) {
 			if (ns.singularity.purchaseAugmentation(faction, augment)) {
 				ns.print(`SUCCESS Purchased augmentation ${augment}`);
 				ns.toast(`Purchased augmentation ${augment}`, "success", 5000);
@@ -418,35 +442,23 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 			}
 		}
 
-		if (!ns.scriptKill("stock-trader.js", "home")) {
-			ns.print(`WARN Could not kill 'stock-trader.js'!`);
-		}
-
-		let pidd = 0;
-		do {
-			pidd = ns.run("sell-stocks.js");
-			await ns.sleep(1000);
-		} while (pidd === 0)
-
-		ns.print(`SUCCESS Liquidating stocks.`);
-		ns.toast(`Liquidating stocks.`, "success", 5000);
-
 		while (true) {
 			const [neurofluxFaction] = playerFactions.length > 0 ? playerFactions.filter(faction => ns.singularity.getAugmentationsFromFaction(faction).includes("NeuroFlux Governor")) : undefined;
 			const cost = ns.singularity.getAugmentationPrice("NeuroFlux Governor");
 			ns.print(cost);
 			ns.singularity.purchaseAugmentation(neurofluxFaction, "NeuroFlux Governor")
-			if (player.money > cost && neurofluxFaction) {
+			if (balance > cost && neurofluxFaction) {
 				var successful = ns.singularity.purchaseAugmentation(neurofluxFaction, "NeuroFlux Governor");
 				if (successful) {
 					ns.print(`SUCCESS Purchased NeuroFlux Governor from ${neurofluxFaction}`);
 				} else {
 					ns.print(`ERROR Could not purchase NeuroFlux Governor from ${neurofluxFaction}!`);
+					break;
 				}
 			} else {
 				break;
 			}
-			await ns.sleep(500);
+			await ns.sleep(100);
 		}
 
 		ns.singularity.installAugmentations("start.js");

@@ -3,7 +3,7 @@
 // requires 4s Market Data TIX API Access
 
 // defines if stocks can be shorted (see BitNode 8)
-const shortAvailable = false;
+const shortAvailable = true;
 
 const commission = 100000;
 /** @param {NS} ns */
@@ -80,7 +80,7 @@ function tendStocks(ns) {
 			//ns.print(`INFO ${stock.summary}`);
 			if (money > 500 * commission) {
 				const sharesToBuy = Math.min(stock.maxShares, Math.floor((money - commission) / stock.bidPrice));
-				if (ns.stock.short(stock.sym, sharesToBuy) > 0) {
+				if (ns.stock.sellShort(stock.sym, sharesToBuy) > 0) {
 					//ns.print(`WARN ${stock.summary} SHORT BOUGHT ${ns.nFormat(sharesToBuy, "$0.0a")}`);
 					ns.print(`WARN ${stock.summary} SHORT BOUGHT \$${ns.formatNumber(sharesToBuy)}`);
 				}
@@ -103,13 +103,65 @@ function tendStocks(ns) {
 			hackStockPort.write(getSymServer(sym));
 		}
 	}
+
+	var stockValuePort = ns.getPortHandle(4); // port 4 for announcing current portfolio value
+	var stockActionPort = ns.getPortHandle(5); // port 5 for listening for commands
+
+	if (stockValuePort.empty()) {
+		stockValuePort.write(overallValue);
+	}
+
+	if (stockActionPort.peek() === 'liq') { // proceed to stop trading and liquidate
+		for (let stock of stocks) {
+			if (stock.shortShares > 0) {
+				let moneyGained = ns.stock.sellShort(stock.sym, stock.shortShares);
+				totalMoneyGained += moneyGained;
+				stock.shortShares = 0;
+			}
+			if (stock.longShares > 0) {
+				let moneyGained = ns.stock.sellStock(stock.sym, stock.longShares);
+				totalMoneyGained += moneyGained;
+				stock.longShares = 0;
+			}
+		}
+		ns.exit();
+	}
+
+	if (typeof stockActionPort.peek() === 'number') {
+		const sellAmount = stockActionPort.read() + 1;
+		let totalMoney = 0;
+		ns.print(totalMoney);
+
+		// Sort stocks by forecast to prioritize selling less promising stocks first
+		stocks.sort((a, b) => a.forecast - b.forecast);
+
+		for (let stock of stocks) {
+			if (totalMoney >= sellAmount) break;
+
+			// Sell short shares first
+			if (stock.shortShares > 0) {
+				let sharesToSell = Math.min(stock.shortShares, Math.ceil((sellAmount - totalMoney) / stock.bidPrice));
+				let moneyGained = ns.stock.sellShort(stock.sym, sharesToSell);
+				totalMoney += moneyGained;
+				stock.shortShares -= sharesToSell;
+			}
+
+			// Sell long shares next if still needed
+			if (totalMoney < sellAmount && stock.longShares > 0) {
+				let sharesToSell = Math.min(stock.longShares, Math.ceil((sellAmount - totalMoney) / stock.bidPrice));
+				let moneyGained = ns.stock.sellStock(stock.sym, sharesToSell);
+				totalMoney += moneyGained;
+				stock.longShares -= sharesToSell;
+			}
+		}
+	}
 }
 
 /** @param {NS} ns */
 export function getAllStocks(ns) {
 	// make a lookup table of all stocks and all their properties
 	const stockSymbols = ns.stock.getSymbols();
-	const stocks = [];
+	const stocks = []; // [{data}, ...]
 	for (const sym of stockSymbols) {
 
 		const pos = ns.stock.getPosition(sym);
@@ -140,6 +192,40 @@ export function getAllStocks(ns) {
 		stocks.push(stock);
 	}
 	return stocks;
+}
+
+/** @param {NS} ns */
+function liquidateStocks(ns) {
+	let totalMoneyGained = 0;
+	let positionsRemaining = false;
+
+	for (let stock of stocks) {
+		// Sell all short shares
+		if (stock.shortShares > 0) {
+			let moneyGained = ns.stock.sellShort(stock.sym, stock.shortShares);
+			totalMoneyGained += moneyGained;
+			stock.shortShares = 0;
+		}
+
+		// Sell all long shares
+		if (stock.longShares > 0) {
+			let moneyGained = ns.stock.sellStock(stock.sym, stock.longShares);
+			totalMoneyGained += moneyGained;
+			stock.longShares = 0;
+		}
+
+		// Check if there are any remaining positions
+		if (stock.shortShares > 0 || stock.longShares > 0) {
+			positionsRemaining = true;
+		}
+	}
+
+	// Return length of stocks array multiplied by -1 if positions are remaining
+	if (positionsRemaining) {
+		return stocks.length * -1;
+	}
+
+	return totalMoneyGained;
 }
 
 /** @param {NS} ns */
