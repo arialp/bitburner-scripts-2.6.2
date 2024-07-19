@@ -52,15 +52,18 @@ export async function main(ns) {
  * @param {Player} player 
  **/
 function upgradeHomeServer(ns, player) {
+	const stockValuePort = ns.getPortHandle(4);
+	const stockActionPort = ns.getPortHandle(5);
+	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.read();
+	const balance = player.money + stockValue;
 	const has4STIX = ns.stock.has4SDataTIXAPI()
 	if (!has4STIX && player.money > 40e9) {
 		ns.stock.purchase4SMarketDataTixApi();
 		ns.stock.purchase4SMarketData();
 	}
-	const balance = player.money + ns.readPort(4);
 	if (balance > ns.singularity.getUpgradeHomeRamCost() && ns.getServerMaxRam("home") < Math.pow(2, 30)) {
 		if (ns.singularity.getUpgradeHomeRamCost() < 2e9 || (has4STIX && ns.singularity.getUpgradeHomeRamCost() < 0.5 * balance)) {
-			if (ns.getPortHandle(5).empty()) ns.writePort(5, ns.singularity.getUpgradeHomeRamCost());
+			if (stockActionPort.empty()) stockActionPort.write(ns.singularity.getUpgradeHomeRamCost());
 			ns.singularity.upgradeHomeRam();
 			ns.print(`INFO Upgraded home RAM to ${ns.formatRam(ns.getServerMaxRam("home"))}`);
 			ns.toast(`Upgraded home RAM to ${ns.formatRam(ns.getServerMaxRam("home"))}`, `info`);
@@ -68,7 +71,7 @@ function upgradeHomeServer(ns, player) {
 	}
 	if (balance > ns.singularity.getUpgradeHomeCoresCost() && ns.getServer("home").cpuCores < 8) {
 		if (has4STIX && ns.singularity.getUpgradeHomeCoresCost() < 0.25 * balance) {
-			if (ns.getPortHandle(5).empty()) ns.writePort(5, ns.singularity.getUpgradeHomeCoresCost());
+			if (stockActionPort.empty()) stockActionPort.write(ns.singularity.getUpgradeHomeCoresCost());
 			ns.singularity.upgradeHomeCores();
 			ns.print(`INFO Upgraded home RAM to ${ns.getServer("home").cpuCores}`);
 			ns.toast(`Upgraded home RAM to ${ns.getServer("home").cpuCores}`, `info`);
@@ -82,6 +85,10 @@ function upgradeHomeServer(ns, player) {
  * @param {Player} player 
  **/
 function getPrograms(ns, player) {
+	const stockValuePort = ns.getPortHandle(4);
+	const stockActionPort = ns.getPortHandle(5);
+	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.read();
+	const balance = player.money + stockValue;
 	const programCosts = {
 		"BruteSSH.exe": 500e3,
 		"FTPCrack.exe": 1500e3,
@@ -96,7 +103,8 @@ function getPrograms(ns, player) {
 	};
 
 	if (!ns.hasTorRouter()) {
-		if (player.money > 1700000) {
+		if (balance > 1700000) {
+			if (stockActionPort.empty()) stockActionPort.write(1700000);
 			ns.singularity.purchaseTor();
 			ns.print("Purchased TOR");
 			ns.toast("Purchased TOR");
@@ -109,8 +117,8 @@ function getPrograms(ns, player) {
 		programs.push("HTTPWorm.exe", "SQLInject.exe");
 	}
 	for (const program of programs) {
-		if (!ns.fileExists(program) && player.money + ns.readPort(4) > programCosts[program]) {
-			if (ns.getPortHandle(5).empty()) ns.writePort(5, programCosts[program]);
+		if (!ns.fileExists(program) && balance > programCosts[program]) {
+			if (stockActionPort.empty()) stockActionPort.write(programCosts[program]);
 			ns.singularity.purchaseProgram(program);
 			ns.print(`INFO Purchased ${program}`);
 			ns.toast(`Purchased ${program}`, `info`);
@@ -284,6 +292,7 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 	const playerFactions = player.factions;
 	const stockValuePort = ns.getPortHandle(4); // port 4 for reading stock-trader.js announcement
 	const stockActionPort = ns.getPortHandle(5); // port 5 for sending commands to stock-trader.js
+	const manualResetPort = ns.getPortHandle(6); // port 6 for manual player initiated reset trigger
 	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.read();
 	const balance = player.money + stockValue;
 	const purchasedAugmentations = ns.singularity.getOwnedAugmentations(true);
@@ -346,6 +355,10 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 		}
 		totalCost += augment[2] * augmentationCostMultiplier;
 		augmentationCostMultiplier *= 1.9; // Apply multiplier for the next augmentation
+	}
+
+	if (manualResetPort.read() === "RESET") {
+		var manualReset = await ns.prompt(`Manual reset triggered: Are you sure?`, { type: "boolean", choices: ["Yes", "No"] });
 	}
 
 	// is goal augmentation's requirements fulfilled?

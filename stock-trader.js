@@ -130,7 +130,6 @@ function tendStocks(ns) {
 	if (typeof stockActionPort.peek() === 'number') {
 		const sellAmount = stockActionPort.read() + 1;
 		let totalMoney = 0;
-		ns.print(totalMoney);
 
 		// Sort stocks by forecast to prioritize selling less promising stocks first
 		stocks.sort((a, b) => a.forecast - b.forecast);
