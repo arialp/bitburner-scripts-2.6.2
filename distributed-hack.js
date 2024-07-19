@@ -43,7 +43,7 @@ const files = [weakenScriptName, growScriptName, hackScriptName];
 // Backdoor script hooked in (requires singluarity functions SF4.1)
 const singularityFunctionsAvailable = true;
 const backdoorScript = "backdoor.js"
-const backdoorScriptRam = 5.8;
+const backdoorScriptRam = ns.getScriptRam("backdoor.js", "home");
 
 // Solve Contract Script hooked in 
 const solveContractsScript = "solve-contracts.js";
