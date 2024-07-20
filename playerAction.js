@@ -1,6 +1,36 @@
 const studyUntilHackLevel = 50;
 const megaCorps = ["Clarke Incorporated", "Bachman & Associates", "OmniTek Incorporated", "NWO", "Fulcrum Secret Technologies", "Blade Industries", "ECorp", "MegaCorp", "KuaiGong International", "Four Sigma"];
-const cityFactions = ["Sector-12", "Chongqing", "New Tokyo", "Ishima", "Aevum", "Volhaven"];
+const cityFactions = [{
+	name: "Sector-12",
+	moneyReq: 15e6,
+	enemies: ["Chongqing", "New Tokyo", "Ishima", "Volhaven"]
+},
+{
+	name: "Chongqing",
+	moneyReq: 20e6,
+	enemies: ["Sector-12", "Aevum", "Volhaven"]
+},
+{
+	name: "New Tokyo",
+	moneyReq: 20e6,
+	enemies: ["Sector-12", "Aevum", "Volhaven"]
+},
+{
+	name: "Ishima",
+	moneyReq: 30e6,
+	enemies: ["Sector-12", "Aevum", "Volhaven"]
+},
+{
+	name: "Aevum",
+	moneyReq: 40e6,
+	enemies: ["Chongqing", "New Tokyo", "Ishima", "Volhaven"]
+},
+{
+	name: "Volhaven",
+	moneyReq: 50e6,
+	enemies: ["Chongqing", "Sector-12", "New Tokyo", "Aevum", "Ishima"]
+}
+];
 const crimes = ["Shoplift", "Rob Store", "Mug", "Larceny", "Deal Drugs", "Bond Forgery", "Traffick Arms", "Homicide", "Grand Theft Auto", "Kidnap", "Assassination", "Heist"];
 const ignoreFactionAugs = new Map([
 	["CyberSec", 'Cranial Signal Processors - Gen II'],
@@ -13,24 +43,26 @@ const ignoreFactionAugs = new Map([
 export async function main(ns) {
 	ns.disableLog("ALL");
 	var player = ns.getPlayer();
+	ns.clearPort(5); // flush port 5 in case of stuck commands
 	while (true) {
 		var augmentationCostMultiplier = 1.9;
 		/**  
 		 * starting from 1.9 because cost calculation
 		 * will act as if goalAugmentation is in augmentationsToBuy already
 		 * */
-		ns.clearLog();
-		ns.print("");
 
-		let sleepTime = 4500;
 		player = ns.getPlayer();
+		ns.clearLog();
 
-		ns.print("\n");
-
-		getPrograms(ns, player);
-		joinFactions(ns);
+		let start = new Date();
+		await getPrograms(ns, player);
+		await joinFactions(ns, player);
 		await buyAugments(ns, player, augmentationCostMultiplier);
-		upgradeHomeServer(ns, player);
+		await upgradeHomeServer(ns, player);
+		let end = new Date();
+		let timeSlept = end.getTime() - start.getTime();
+		const sleepTime = 5000 - timeSlept;
+
 
 		const factionsForReputation = getFactionsForReputation(ns, player);
 		ns.print("Factions for Reputation: " + [...factionsForReputation.keys()]);
@@ -39,10 +71,10 @@ export async function main(ns) {
 		ns.print("Current action useful: " + actionUseful);
 
 		if (!actionUseful) {
-			sleepTime = chooseAction(ns, sleepTime, player, factionsForReputation);
+			chooseAction(ns, player, factionsForReputation);
 		}
 
-		await ns.sleep(sleepTime);
+		await ns.sleep(Math.max(100, sleepTime));
 	}
 }
 
@@ -51,44 +83,69 @@ export async function main(ns) {
  * @param {NS} ns
  * @param {Player} player 
  **/
-function upgradeHomeServer(ns, player) {
-	const stockValuePort = ns.getPortHandle(4);
+export async function upgradeHomeServer(ns, player) {
 	const stockActionPort = ns.getPortHandle(5);
-	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.peek();
-	const balance = player.money + stockValue;
-	const has4STIX = ns.stock.has4SDataTIXAPI()
+	const has4STIX = ns.stock.has4SDataTIXAPI();
+
 	if (!has4STIX && player.money > 40e9) {
 		ns.stock.purchase4SMarketDataTixApi();
 		ns.stock.purchase4SMarketData();
 	}
-	if (balance > ns.singularity.getUpgradeHomeRamCost() && ns.getServerMaxRam("home") < Math.pow(2, 30)) {
-		if (ns.singularity.getUpgradeHomeRamCost() < 2e9 || (has4STIX && ns.singularity.getUpgradeHomeRamCost() < 0.5 * balance)) {
-			if (stockActionPort.empty()) stockActionPort.write(ns.singularity.getUpgradeHomeRamCost());
-			ns.singularity.upgradeHomeRam();
-			ns.print(`INFO Upgraded home RAM to ${ns.formatRam(ns.getServerMaxRam("home"))}`);
-			ns.toast(`Upgraded home RAM to ${ns.formatRam(ns.getServerMaxRam("home"))}`, `info`);
-		}
+
+	const upgradeHomeRam = async () => {
+		const ramUpgradeCost = ns.singularity.getUpgradeHomeRamCost();
+		if (ns.getServerMaxRam("home") >= Math.pow(2, 30)) return false;
+		if (await requestFunds(ns, player, ramUpgradeCost)) {
+			const ramUpgradeSuccess = ns.singularity.upgradeHomeRam();
+			if (ramUpgradeSuccess) {
+				ns.print(`INFO Upgraded home RAM to ${ns.formatRam(ns.getServerMaxRam("home"))}`);
+				ns.toast(`Upgraded home RAM to ${ns.formatRam(ns.getServerMaxRam("home"))}`, `info`);
+			} else {
+				ns.print(`ERROR Could not upgrade home RAM!`);
+				ns.toast(`Could not upgrade home RAM!`, `error`);
+			}
+			stockActionPort.write(JSON.stringify(['ACK', ramUpgradeSuccess]));
+			return ramUpgradeSuccess;
+		} else return false;
 	}
-	if (balance > ns.singularity.getUpgradeHomeCoresCost() && ns.getServer("home").cpuCores < 8) {
-		if (has4STIX && ns.singularity.getUpgradeHomeCoresCost() < 0.25 * balance) {
-			if (stockActionPort.empty()) stockActionPort.write(ns.singularity.getUpgradeHomeCoresCost());
-			ns.singularity.upgradeHomeCores();
-			ns.print(`INFO Upgraded home RAM to ${ns.getServer("home").cpuCores}`);
-			ns.toast(`Upgraded home RAM to ${ns.getServer("home").cpuCores}`, `info`);
-		}
+
+	const upgradeHomeCores = async () => {
+		const coreUpgradeCost = ns.singularity.getUpgradeHomeCoresCost();
+		if (ns.getServer("home").cpuCores >= 8) return false;
+		if (await requestFunds(ns, player, coreUpgradeCost)) {
+			const coreUpgradeSuccess = ns.singularity.upgradeHomeCores();
+			if (coreUpgradeSuccess) {
+				ns.print(`INFO Upgraded home cores to ${ns.getServer("home").cpuCores}`);
+				ns.toast(`Upgraded home cores to ${ns.getServer("home").cpuCores}`, `info`);
+			} else {
+				ns.print(`ERROR Could not upgrade home cores!`);
+				ns.toast(`Could not upgrade home cores!`, `error`);
+			}
+			stockActionPort.write(JSON.stringify(['ACK', coreUpgradeSuccess]));
+			return coreUpgradeSuccess;
+		} else return false;
 	}
+
+	// Upgrade Home RAM
+	await upgradeHomeRam();
+
+	// Upgrade Home Cores
+	await upgradeHomeCores();
 }
 
 /** 
  * Purchases necessary programs.
  * @param {NS} ns
  * @param {Player} player 
+ * @returns {Promise<boolean>} true if no errors,
+ * false if tor purchase failed
  **/
-function getPrograms(ns, player) {
+export async function getPrograms(ns, player) {
 	const stockValuePort = ns.getPortHandle(4);
 	const stockActionPort = ns.getPortHandle(5);
 	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.peek();
 	const balance = player.money + stockValue;
+	const programs = ["BruteSSH.exe", "FTPCrack.exe", "relaySMTP.exe", "ServerProfiler.exe", "DeepscanV1.exe", "DeepscanV2.exe", "AutoLink.exe", "Formulas.exe"];
 	const programCosts = {
 		"BruteSSH.exe": 500e3,
 		"FTPCrack.exe": 1500e3,
@@ -103,38 +160,50 @@ function getPrograms(ns, player) {
 	};
 
 	if (!ns.hasTorRouter()) {
-		if (balance > 1700000) {
-			if (stockActionPort.empty()) stockActionPort.write(1700000);
-			ns.singularity.purchaseTor();
-			ns.print("Purchased TOR");
-			ns.toast("Purchased TOR");
-		} else {
-			return;
-		}
+		if (await requestFunds(ns, player, 1e6)) {
+			const torSuccess = ns.singularity.purchaseTor();
+			if (torSuccess) {
+				ns.print("SUCCESS Purchased TOR");
+				ns.toast("Purchased TOR", "success");
+			} else {
+				ns.print("ERROR Could not purchase TOR!");
+				ns.toast("Purchased TOR", "error");
+			}
+			stockActionPort.write(JSON.stringify(['ACK', torSuccess]));
+			if (!torSuccess) return false;
+		} else return false;
 	}
-	const programs = ["BruteSSH.exe", "FTPCrack.exe", "relaySMTP.exe", "ServerProfiler.exe", "DeepscanV1.exe", "DeepscanV2.exe", "AutoLink.exe", "Formulas.exe"];
+
+
 	if (ns.stock.has4SDataTIXAPI()) {
 		programs.push("HTTPWorm.exe", "SQLInject.exe");
 	}
+
 	for (const program of programs) {
-		if (!ns.fileExists(program) && balance * 0.5 > programCosts[program]) {
-			if (stockActionPort.empty()) stockActionPort.write(programCosts[program]);
-			ns.singularity.purchaseProgram(program);
-			ns.print(`INFO Purchased ${program}`);
-			ns.toast(`Purchased ${program}`, `info`);
+		if (ns.fileExists(program)) continue;
+		if (await requestFunds(ns, player, programCosts[program])) {
+			const progSuccess = ns.singularity.purchaseProgram(program);
+			if (progSuccess) {
+				ns.print(`SUCCESS Purchased ${program}`);
+				ns.toast(`Purchased ${program}`, `success`);
+			} else {
+				ns.print(`ERROR Could not purchase ${program}`);
+				ns.toast(`Could not purchase ${program}`, `error`);
+			}
+			stockActionPort.write(JSON.stringify(['ACK', progSuccess]));
 		}
 	}
+	return true;
 }
 
 /** 
  * Decides the next action for the player.
  * @param {NS} ns
- * @param {number} sleepTime
  * @param {Player} player
  * @param {Map} factions
  * @returns {number} The adjusted sleep time
  **/
-function chooseAction(ns, sleepTime, player, factions) {
+function chooseAction(ns, player, factions) {
 	var focus = ns.singularity.isFocused();
 	if (ns.getHackingLevel() < studyUntilHackLevel) {
 		ns.singularity.universityCourse("rothman university", "Study Computer Science", focus);
@@ -163,7 +232,7 @@ function chooseAction(ns, sleepTime, player, factions) {
 	} else {
 		ns.toast(`Crime Time! Please focus on something to start crimes.`, `warning`);
 	}
-	return sleepTime;
+	return;
 }
 
 /** 
@@ -288,11 +357,12 @@ function getCorpsForReputation(ns, player) {
  * @param {Player} player
  * @param {number} augmentationCostMultiplier 
  **/
-async function buyAugments(ns, player, augmentationCostMultiplier) {
+export async function buyAugments(ns, player, augmentationCostMultiplier) {
 	const playerFactions = player.factions;
 	const stockValuePort = ns.getPortHandle(4); // port 4 for reading stock-trader.js announcement
 	const stockActionPort = ns.getPortHandle(5); // port 5 for sending commands to stock-trader.js
 	const manualResetPort = ns.getPortHandle(6); // port 6 for manual player initiated reset trigger
+	var manualReset = false;
 	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.peek();
 	const balance = player.money + stockValue;
 	const purchasedAugmentations = ns.singularity.getOwnedAugmentations(true);
@@ -312,7 +382,6 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 
 	// Set goal as the highest rep augment among joined factions.
 	let allAugmentations = [];
-	let uniqueAugments = new Set();
 
 	for (const faction of playerFactions) {
 
@@ -331,17 +400,10 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 					goalAugmentation = augment;
 					goalAugmentationFaction = faction;
 				}
-
-				if (!uniqueAugments.has(augment)) {
-					uniqueAugments.add(augment);
-					allAugmentations.push([augment, faction, repReq]);
-				}
+				allAugmentations.push([augment, faction, repReq]);
 			}
 		}
 	}
-
-
-
 
 	allAugmentations.sort((a, b) => b[2] - a[2]);
 
@@ -410,7 +472,6 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 				: false
 		);
 	}
-
 	const getMoneyForReputation = (faction, requiredRep) => {
 		if (ns.fileExists("Formulas.exe", "home")) {
 			if (faction === "") return;
@@ -434,33 +495,28 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 		if (ns.singularity.getFactionRep(goalAugmentationFaction) < ns.singularity.getAugmentationRepReq(goalAugmentation) && hasEnoughFavor(goalAugmentationFaction)) {
 			const requiredRep = ns.singularity.getAugmentationRepReq(goalAugmentation);
 			const moneyNeeded = getMoneyForReputation(goalAugmentationFaction, requiredRep);
-			//ns.print(requiredRep)
-			//ns.print(moneyNeeded)
 			ns.print(`Donation Goal: ${ns.formatNumber(moneyNeeded)}`);
-			if (balance * 0.5 >= moneyNeeded) {
-				if (stockActionPort.empty()) {
-					stockActionPort.write(moneyNeeded);
-				}
-				if (ns.singularity.donateToFaction(goalAugmentationFaction, moneyNeeded)) {
+
+			if (await requestFunds(ns, player, moneyNeeded)) {
+				const donationSuccess = ns.singularity.donateToFaction(goalAugmentationFaction, moneyNeeded);
+				if (donationSuccess) {
 					ns.print(`SUCCESS Donated ${ns.formatNumber(moneyNeeded)} to ${goalAugmentationFaction}`);
 					ns.toast(`Donated ${ns.formatNumber(moneyNeeded)} to ${goalAugmentationFaction}`, "success", 5000);
 				} else {
 					ns.print(`ERROR Could not donate to ${goalAugmentationFaction}!`);
 					ns.toast(`Could not donate to ${goalAugmentationFaction}!`, "error", 5000);
 				}
+				stockActionPort.write(JSON.stringify(['ACK', donationSuccess]));
 			}
 		}
 	}
 
-	if (goalAugmentationMet && balance > totalCost || manualReset) {
+	if ((goalAugmentationMet && balance * 0.9 > totalCost) || manualReset) {
 		if (augmentationsToBuy.length <= 0) return; //failsafe: this should not run but just in case
-		stockActionPort.clear(); // override any previous commands
-		stockActionPort.write('liq'); // send signal to liquidate stocks
-		await ns.sleep(5000); // time for stock trader to send data
-		let liquidate = stockValuePort.peek() === "NULL DATA PORT" ? 0 : stockValuePort.peek();
-		if (liquidate < 0) { ns.toast(`Couldn't liquidate ${-liquidate} stocks. Aborting.`, "error", 5000); return; }
-		if (liquidate = 0) ns.toast(`Assuming portfolio is empty. Continuing.`, "info", 5000);
-		if (liquidate > 0) ns.toast(`Sold each stock for ${ns.formatNumber(liquidate)}`, "success", 5000);
+
+		if (!await liquidateStocks(ns)) return; // something went wrong
+
+		stockActionPort.write(JSON.stringify(['ACK', true]));
 
 		for (const [augment, faction, cost] of augmentationsToBuy) {
 			if (ns.singularity.purchaseAugmentation(faction, augment)) {
@@ -473,10 +529,8 @@ async function buyAugments(ns, player, augmentationCostMultiplier) {
 		}
 
 		while (true) {
-			const [neurofluxFaction] = playerFactions.length > 0 ? playerFactions.filter(faction => ns.singularity.getAugmentationsFromFaction(faction).includes("NeuroFlux Governor")) : undefined;
+			const [neurofluxFaction] = playerFactions.length > 0 ? playerFactions.filter(faction => ns.singularity.getAugmentationsFromFaction(faction).includes("NeuroFlux Governor")) : [undefined];
 			const cost = ns.singularity.getAugmentationPrice("NeuroFlux Governor");
-			ns.print(cost);
-			ns.singularity.purchaseAugmentation(neurofluxFaction, "NeuroFlux Governor")
 			if (balance > cost && neurofluxFaction) {
 				var successful = ns.singularity.purchaseAugmentation(neurofluxFaction, "NeuroFlux Governor");
 				if (successful) {
@@ -556,12 +610,60 @@ function commitCrime(ns, player, combatStatsGoal = 300) {
  * Joins factions that the player is eligible for.
  * @param {NS} ns 
  **/
-function joinFactions(ns) {
-	const newFactions = ns.singularity.checkFactionInvitations();
-	for (const faction of newFactions) {
-		if (!cityFactions.includes(faction)) {
-			ns.singularity.joinFaction(faction);
-			ns.print("Joined " + faction);
+async function joinFactions(ns, player) {
+	const stockActionPort = ns.getPortHandle(5);
+	const scriptToRun = "travelToFaction.js";
+	const factions = player.factions;
+	const invitations = ns.singularity.checkFactionInvitations();
+	const joinableCityFactions = new Set();
+
+	// Iterate over city factions and determine joinable factions
+	for (const cityFaction of cityFactions) {
+		if (!factions.includes(cityFaction.name) && !invitations.includes(cityFaction.name)) {
+			const augments = ns.singularity.getAugmentationsFromFaction(cityFaction.name);
+			const unpurchasedAugments = augments.filter(aug => !ns.singularity.getOwnedAugmentations(false).includes(aug) && aug !== "NeuroFlux Governor");
+			if (unpurchasedAugments.length > 0) {
+				let isEnemy = false;
+				for (const enemy of cityFaction.enemies) {
+					if (factions.includes(enemy) || invitations.includes(enemy) || joinableCityFactions.has(enemy)) {
+						isEnemy = true;
+						break;
+					}
+				}
+				if (!isEnemy) {
+					joinableCityFactions.add(cityFaction.name);
+				}
+			}
+		}
+	}
+
+	// Join factions from invitations
+	for (const faction of invitations) {
+		ns.singularity.joinFaction(faction);
+	}
+
+	for (const cityFactionName of joinableCityFactions) {
+		const cityFaction = cityFactions.find(cf => cf.name === cityFactionName);
+		var running = ns.isRunning(scriptToRun, "home", cityFaction.name);
+		if (running) break;
+	}
+
+	// Join city factions if requirements are met
+	for (const cityFactionName of joinableCityFactions) {
+		const cityFaction = cityFactions.find(cf => cf.name === cityFactionName);
+		if (await requestFunds(ns, player, cityFaction.moneyReq)){
+			const homeMaxRam = ns.getServerMaxRam("home");
+			const homeUsedRam = ns.getServerUsedRam("home");
+			const freeRam = homeMaxRam - homeUsedRam;
+			const scriptRamUsage = ns.getScriptRam(scriptToRun, "home");
+			if (freeRam >= scriptRamUsage && !running) {
+				const pid = ns.run(scriptToRun, 1, cityFaction.name);
+				if (pid === 0) {
+					stockActionPort.write(JSON.stringify(['ACK', false]));
+				} else {
+					// ACK packet sent by travelToFaction.js
+				}
+			}
 		}
 	}
 }
@@ -583,4 +685,69 @@ function maxAugmentRep(ns, faction) {
 		return maxReputationRequired;
 	}
 	return 0;
+}
+
+/** 
+ * Request funds from stock-trader.js
+ * If true, Do not keep stock-trader waiting by sending an ['ACK', true || false] packet.
+ * If false, no need to send a packet.
+ * @param {NS} ns 
+ * @param {Player} player
+ * @param {Number} amountNeeded
+ * @returns {Promise<boolean>} true if amountNeeded is fulfilled or player already has enough money,
+ * false otherwise
+ * */
+export async function requestFunds(ns, player, amountNeeded) {
+	const stockValuePort = ns.getPortHandle(4);
+	const stockActionPort = ns.getPortHandle(5);
+	const stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.peek();
+
+	if (stockValue * 0.5 < amountNeeded) return false;
+	if (player.money >= amountNeeded) return true;
+
+	if (player.money < amountNeeded && stockValue * 0.5 >= amountNeeded) {
+		if (!stockActionPort.empty()) return false;
+
+		stockActionPort.write(JSON.stringify(['SYN', amountNeeded]));
+		await stockActionPort.nextWrite();
+
+		const [signal, payload] = JSON.parse(stockActionPort.read());
+
+		if (signal !== 'SYNACK') return false;
+
+		if (payload < amountNeeded) {
+			stockActionPort.write(JSON.stringify(['ACK', false]));
+			return false;
+		}
+		return true;
+	}
+}
+
+/** 
+ * Liquidates all stocks.
+ * If true, Do not keep stock-trader waiting by sending an ['ACK', true || false] packet.
+ * If false, no need to send a packet.
+ * @param {NS} ns 
+ * @returns {Promise<boolean>} true if successful, false otherwise
+ * */
+export async function liquidateStocks(ns) {
+	const stockActionPort = ns.getPortHandle(5);
+	stockActionPort.clear(); // override any previous commands
+	stockActionPort.write(JSON.stringify(['SYN', 'liq'])); // send signal to liquidate stocks
+	await stockActionPort.nextWrite();
+	const [signal, payload] = JSON.parse(stockActionPort.read());
+
+	if (signal !== 'SYNACK') return false; // something went wrong
+
+	if (payload < 0) {
+		ns.toast(`Couldn't liquidate ${-payload} stocks. Aborting.`, "error", 5000);
+		stockActionPort.write(JSON.stringify(['ACK', false]));
+		return false;
+	}
+	if (payload === 0) {
+		ns.toast(`Assuming portfolio is empty. Continuing.`, "info", 5000);
+	} else {
+		ns.toast(`Sold each stock for ${ns.formatNumber(payload)}`, "success", 5000);
+	}
+	return true;
 }
