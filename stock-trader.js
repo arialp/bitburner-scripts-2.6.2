@@ -4,22 +4,30 @@
 
 // defines if stocks can be shorted (see BitNode 8)
 const shortAvailable = true;
-
 const commission = 100000;
+
 /** @param {NS} ns */
 export async function main(ns) {
 	ns.disableLog("ALL");
+	const msPerStockUpdate = ns.stock.getConstants().msPerStockUpdate;
+	const msPerStockUpdateMin = ns.stock.getConstants().msPerStockUpdateMin;
 
 	while (true) {
-		tendStocks(ns);
-		await ns.sleep(5 * 1000);
+		const bonusTime = ns.stock.getBonusTime();
+		const sleepTime = bonusTime > 0 ? msPerStockUpdateMin : msPerStockUpdate;
+		let start = new Date();
+		await tendStocks(ns);
+		let end = new Date();
+		let timeSlept = end.getTime() - start.getTime();
+		await ns.sleep(sleepTime - timeSlept);
+		timeSlept = 0;
 	}
 }
 
 /** @param {NS} ns */
-function tendStocks(ns) {
+async function tendStocks(ns) {
 	ns.print("");
-	var stocks = getAllStocks(ns);
+	const stocks = getAllStocks(ns);
 
 	stocks.sort((a, b) => b.profitPotential - a.profitPotential);
 
@@ -57,7 +65,7 @@ function tendStocks(ns) {
 				const saleProfit = saleTotal - saleCost - 2 * commission;
 				stock.shares = 0;
 				longStocks.add(stock.sym);
-				ns.print(`WARN ${stock.summary} SHORT SOLD for \$${ns.formatNumber(saleProfit)} profit`);
+				ns.print(`WARN ${stock.summary} SHORT SOLD for \$${ns.formatNumber(-saleProfit)} profit`);
 			}
 		}
 	}
@@ -80,7 +88,7 @@ function tendStocks(ns) {
 			//ns.print(`INFO ${stock.summary}`);
 			if (money > 500 * commission) {
 				const sharesToBuy = Math.min(stock.maxShares, Math.floor((money - commission) / stock.bidPrice));
-				if (ns.stock.sellShort(stock.sym, sharesToBuy) > 0) {
+				if (ns.stock.buyShort(stock.sym, sharesToBuy) > 0) {
 					//ns.print(`WARN ${stock.summary} SHORT BOUGHT ${ns.nFormat(sharesToBuy, "$0.0a")}`);
 					ns.print(`WARN ${stock.summary} SHORT BOUGHT \$${ns.formatNumber(sharesToBuy)}`);
 				}
@@ -114,46 +122,59 @@ function tendStocks(ns) {
 		stockValuePort.write(overallValue);
 	}
 
-	if (stockActionPort.peek() === 'liq') { // proceed to stop trading and liquidate
-		for (let stock of stocks) {
-			if (stock.shortShares > 0) {
-				let moneyGained = ns.stock.sellShort(stock.sym, stock.shortShares);
-				totalMoneyGained += moneyGained;
-				stock.shortShares = 0;
-			}
-			if (stock.longShares > 0) {
-				let moneyGained = ns.stock.sellStock(stock.sym, stock.longShares);
-				totalMoneyGained += moneyGained;
-				stock.longShares = 0;
-			}
-		}
-		ns.exit();
-	}
+	if (!stockActionPort.empty()) {
+		const packet = JSON.parse(stockActionPort.read());
+		const [signal, payload] = packet;
 
-	if (typeof stockActionPort.peek() === 'number') {
-		const sellAmount = stockActionPort.read() + 1;
-		let totalMoney = 0;
+		if (signal === 'SYN') {
+			if (payload === 'liq') { // proceed to stop trading and liquidate
+				let totalMoneyGained = 0;
+				for (let stock of stocks) {
+					if (stock.shortShares > 0) {
+						let moneyGained = ns.stock.sellShort(stock.sym, stock.shortShares);
+						totalMoneyGained += moneyGained;
+						stock.shortShares = 0;
+					}
+					if (stock.longShares > 0) {
+						let moneyGained = ns.stock.sellStock(stock.sym, stock.longShares);
+						totalMoneyGained += moneyGained;
+						stock.longShares = 0;
+					}
+				}
+				//totalMoneyGained = (stocks.length > 0) ? -totalMoneyGained : totalMoneyGained;
+				stockActionPort.write(JSON.stringify(["SYNACK", totalMoneyGained]));
+				await stockActionPort.nextWrite();
+				const [newSignal, newPayload] = JSON.parse(stockActionPort.read());
+				if (newSignal === 'ACK' && newPayload) {
+					ns.exit();
+				}
 
-		// Sort stocks by forecast to prioritize selling less promising stocks first
-		stocks.sort((a, b) => a.forecast - b.forecast);
+			} else if (typeof payload === 'number') {
+				const sellAmount = payload + 1;
+				let totalMoney = 0;
 
-		for (let stock of stocks) {
-			if (totalMoney >= sellAmount) break;
+				for (let i = stocks.length - 1; i >= 0; i--) {
+					let stock = stocks[i];
+					if (totalMoney >= sellAmount) break;
 
-			// Sell short shares first
-			if (stock.shortShares > 0) {
-				let sharesToSell = Math.min(stock.shortShares, Math.ceil((sellAmount - totalMoney) / stock.bidPrice));
-				let moneyGained = ns.stock.sellShort(stock.sym, sharesToSell);
-				totalMoney += moneyGained;
-				stock.shortShares -= sharesToSell;
-			}
-
-			// Sell long shares next if still needed
-			if (totalMoney < sellAmount && stock.longShares > 0) {
-				let sharesToSell = Math.min(stock.longShares, Math.ceil((sellAmount - totalMoney) / stock.bidPrice));
-				let moneyGained = ns.stock.sellStock(stock.sym, sharesToSell);
-				totalMoney += moneyGained;
-				stock.longShares -= sharesToSell;
+					if (stock.shortShares > 0) {
+						let sharesToSell = Math.min(stock.shortShares, Math.floor((sellAmount + commission - totalMoney) / stock.bidPrice));
+						let salePrice = ns.stock.sellShort(stock.sym, sharesToSell);
+						let saleTotal = salePrice * sharesToSell - commission;
+						totalMoney += saleTotal;
+						stock.shortShares -= sharesToSell;
+					} else if (stock.longShares > 0) {
+						let sharesToSell = Math.min(stock.longShares, Math.floor((sellAmount + commission - totalMoney) / stock.bidPrice));
+						let salePrice = ns.stock.sellStock(stock.sym, sharesToSell);
+						let saleTotal = salePrice * sharesToSell - commission;
+						totalMoney += saleTotal;
+						stock.longShares -= sharesToSell;
+					}
+				}
+				totalMoney = Math.max(0, totalMoney);
+				stockActionPort.write(JSON.stringify(["SYNACK", totalMoney]));
+				await stockActionPort.nextWrite();
+				stockActionPort.read();
 			}
 		}
 	}
