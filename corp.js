@@ -3,15 +3,15 @@ export async function main(ns) {
 	ns.disableLog("disableLog"); ns.disableLog("sleep");
 
 	if (!ns.getPlayer().hasCorporation) {
-		ns.corporation.createCorporation("MyCorp");
+		if(!ns.corporation.createCorporation("MyCorp")) return;
 	}
 	var corp = ns.corporation.getCorporation();
 	if (corp.divisions.length < 1) {
 		// initial Company setup
 		ns.corporation.expandIndustry("Tobacco", "Tobacco");
 		corp = ns.corporation.getCorporation();
-		await initialCorpUpgrade(ns);
-		await initCities(ns, corp.divisions[0]);
+		initialCorpUpgrade(ns);
+		initCities(ns, corp.divisions[0]);
 	}
 
 	while (true) {
@@ -19,7 +19,7 @@ export async function main(ns) {
 		for (const division of corp.divisions.reverse()) {
 			upgradeWarehouses(ns, division);
 			upgradeCorp(ns);
-			await hireEmployees(ns, division);
+			hireEmployees(ns, division);
 			newProduct(ns, division);
 			doResearch(ns, division);
 		}
@@ -32,7 +32,8 @@ export async function main(ns) {
 	}
 }
 
-async function hireEmployees(ns, division, productCity = "Sector-12") {
+/** @param {NS} ns **/
+function hireEmployees(ns, division, productCity = "Sector-12") {
 	var employees = ns.corporation.getOffice(division.name, productCity).employees.length;
 	while (ns.corporation.getCorporation().funds > (cities.length * ns.corporation.getOfficeSizeUpgradeCost(division.name, productCity, 3))) {
 		// upgrade all cities + 3 employees if sufficient funds
@@ -40,7 +41,7 @@ async function hireEmployees(ns, division, productCity = "Sector-12") {
 		for (const city of cities) {
 			ns.corporation.upgradeOfficeSize(division.name, city, 3);
 			for (var i = 0; i < 3; i++) {
-				await ns.corporation.hireEmployee(division.name, city);
+				ns.corporation.hireEmployee(division.name, city);
 			}
 		}
 	}
@@ -51,39 +52,40 @@ async function hireEmployees(ns, division, productCity = "Sector-12") {
 			if (ns.corporation.hasResearched(division.name, "Market-TA.II")) {
 				// TODO: Simplify here. ProductCity config can always be used
 				if (city == productCity) {
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Operations", Math.ceil(employees / 5));
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", Math.ceil(employees / 5));
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Business", Math.ceil(employees / 5));
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Management", Math.ceil(employees / 10));
+					ns.corporation.setAutoJobAssignment(division.name, city, "Operations", Math.ceil(employees / 5));
+					ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", Math.ceil(employees / 5));
+					ns.corporation.setAutoJobAssignment(division.name, city, "Business", Math.ceil(employees / 5));
+					ns.corporation.setAutoJobAssignment(division.name, city, "Management", Math.ceil(employees / 10));
 					var remainingEmployees = employees - (3 * Math.ceil(employees / 5) + Math.ceil(employees / 10));
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Training", Math.ceil(remainingEmployees));
+					ns.corporation.setAutoJobAssignment(division.name, city, "Training", Math.ceil(remainingEmployees));
 				}
 				else {
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Operations", Math.floor(employees / 10));
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", 1);
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Business", Math.floor(employees / 5));
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Management", Math.ceil(employees / 100));
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", Math.ceil(employees / 2));
+					ns.corporation.setAutoJobAssignment(division.name, city, "Operations", Math.floor(employees / 10));
+					ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", 1);
+					ns.corporation.setAutoJobAssignment(division.name, city, "Business", Math.floor(employees / 5));
+					ns.corporation.setAutoJobAssignment(division.name, city, "Management", Math.ceil(employees / 100));
+					ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", Math.ceil(employees / 2));
 					var remainingEmployees = employees - (Math.floor(employees / 5) + Math.floor(employees / 10) + 1 + Math.ceil(employees / 100) + Math.ceil(employees / 2));
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Training", Math.floor(remainingEmployees));
+					ns.corporation.setAutoJobAssignment(division.name, city, "Training", Math.floor(remainingEmployees));
 				}
 			}
 			else {
 				if (city == productCity) {
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Operations", Math.floor((employees - 2) / 2));
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", Math.ceil((employees - 2) / 2));
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Management", 2);
+					ns.corporation.setAutoJobAssignment(division.name, city, "Operations", Math.floor((employees - 2) / 2));
+					ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", Math.ceil((employees - 2) / 2));
+					ns.corporation.setAutoJobAssignment(division.name, city, "Management", 2);
 				}
 				else {
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Operations", 1);
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", 1);
-					await ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", (employees - 2));
+					ns.corporation.setAutoJobAssignment(division.name, city, "Operations", 1);
+					ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", 1);
+					ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", (employees - 2));
 				}
 			}
 		}
 	}
 }
 
+/** @param {NS} ns **/
 function upgradeWarehouses(ns, division) {
 	for (const city of cities) {
 		// check if warehouses are near max capacity and upgrade if needed
@@ -104,6 +106,7 @@ function upgradeWarehouses(ns, division) {
 	}
 }
 
+/** @param {NS} ns **/
 function upgradeCorp(ns) {
 	for (const upgrade of upgradeList) {
 		// purchase upgrades based on available funds and priority; see upgradeList
@@ -125,6 +128,7 @@ function upgradeCorp(ns) {
 	}
 }
 
+/** @param {NS} ns **/
 async function trickInvest(ns, division, productCity = "Sector-12") {
 	ns.print("Prepare to trick investors")
 	for (var product of division.products) {
@@ -136,12 +140,12 @@ async function trickInvest(ns, division, productCity = "Sector-12") {
 		// put all employees into production to produce as fast as possible 
 		const employees = ns.corporation.getOffice(division.name, city).employees.length;
 
-		await ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", 0);
-		await ns.corporation.setAutoJobAssignment(division.name, city, "Management", 0);
-		await ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", 0);
-		await ns.corporation.setAutoJobAssignment(division.name, city, "Operations", employees - 2); // workaround for bug
-		await ns.corporation.setAutoJobAssignment(division.name, city, "Operations", employees - 1); // workaround for bug
-		await ns.corporation.setAutoJobAssignment(division.name, city, "Operations", employees);
+		ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", 0);
+		ns.corporation.setAutoJobAssignment(division.name, city, "Management", 0);
+		ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", 0);
+		ns.corporation.setAutoJobAssignment(division.name, city, "Operations", employees - 2); // workaround for bug
+		ns.corporation.setAutoJobAssignment(division.name, city, "Operations", employees - 1); // workaround for bug
+		ns.corporation.setAutoJobAssignment(division.name, city, "Operations", employees);
 	}
 
 	ns.print("Wait for warehouses to fill up")
@@ -160,14 +164,14 @@ async function trickInvest(ns, division, productCity = "Sector-12") {
 	ns.print("Warehouses are full, start selling");
 
 	var initialInvestFunds = ns.corporation.getInvestmentOffer().funds;
-	ns.print("Initial investmant offer: " + ns.nFormat(initialInvestFunds, "0.0a"));
+	ns.print("Initial investmant offer: " + ns.formatNumber(initialInvestFunds));
 	for (const city of cities) {
 		// put all employees into business to sell as much as possible 
 		const employees = ns.corporation.getOffice(division.name, city).employees.length;
-		await ns.corporation.setAutoJobAssignment(division.name, city, "Operations", 0);
-		await ns.corporation.setAutoJobAssignment(division.name, city, "Business", employees - 2); // workaround for bug
-		await ns.corporation.setAutoJobAssignment(division.name, city, "Business", employees - 1); // workaround for bug
-		await ns.corporation.setAutoJobAssignment(division.name, city, "Business", employees);
+		ns.corporation.setAutoJobAssignment(division.name, city, "Operations", 0);
+		ns.corporation.setAutoJobAssignment(division.name, city, "Business", employees - 2); // workaround for bug
+		ns.corporation.setAutoJobAssignment(division.name, city, "Business", employees - 1); // workaround for bug
+		ns.corporation.setAutoJobAssignment(division.name, city, "Business", employees);
 	}
 	for (var product of division.products) {
 		// sell products again
@@ -179,33 +183,34 @@ async function trickInvest(ns, division, productCity = "Sector-12") {
 		await ns.sleep(200);
 	}
 
-	ns.print("Investment offer for 10% shares: " + ns.nFormat(ns.corporation.getInvestmentOffer().funds, "0.0a"));
-	ns.print("Funds before public: " + ns.nFormat(ns.corporation.getCorporation().funds, "0.0a"));
+	ns.print("Investment offer for 10% shares: " + ns.formatNumber(ns.corporation.getInvestmentOffer().funds));
+	ns.print("Funds before public: " + ns.formatNumber(ns.corporation.getCorporation().funds));
 
 	ns.corporation.goPublic(800e6);
 
-	ns.print("Funds after  public: " + ns.nFormat(ns.corporation.getCorporation().funds, "0.0a"));
+	ns.print("Funds after  public: " + ns.formatNumber(ns.corporation.getCorporation().funds));
 
 	for (const city of cities) {
 		// set employees back to normal operation
 		const employees = ns.corporation.getOffice(division.name, city).employees.length;
-		await ns.corporation.setAutoJobAssignment(division.name, city, "Business", 0);
+		ns.corporation.setAutoJobAssignment(division.name, city, "Business", 0);
 		if (city == productCity) {
-			await ns.corporation.setAutoJobAssignment(division.name, city, "Operations", 1);
-			await ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", (employees - 2));
-			await ns.corporation.setAutoJobAssignment(division.name, city, "Management", 1);
+			ns.corporation.setAutoJobAssignment(division.name, city, "Operations", 1);
+			ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", (employees - 2));
+			ns.corporation.setAutoJobAssignment(division.name, city, "Management", 1);
 		}
 		else {
-			await ns.corporation.setAutoJobAssignment(division.name, city, "Operations", 1);
-			await ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", (employees - 1));
+			ns.corporation.setAutoJobAssignment(division.name, city, "Operations", 1);
+			ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", (employees - 1));
 		}
 	}
 
 	// with gained money, expand to the most profitable division
 	ns.corporation.expandIndustry("Healthcare", "Healthcare");
-	await initCities(ns, ns.corporation.getCorporation().divisions[1]);
+	initCities(ns, ns.corporation.getCorporation().divisions[1]);
 }
 
+/** @param {NS} ns **/
 function doResearch(ns, division) {
 	const laboratory = "Hi-Tech R&D Laboratory"
 	const marketTAI = "Market-TA.I";
@@ -219,8 +224,7 @@ function doResearch(ns, division) {
 	}
 	else if (!ns.corporation.hasResearched(division.name, marketTAII)) {
 		// always research Market-TA.I plus .II first and in one step
-		var researchCost = ns.corporation.getResearchCost(division.name, marketTAI)
-			+ ns.corporation.getResearchCost(division.name, marketTAII);
+		var researchCost = ns.corporation.getResearchCost(division.name, marketTAI) + ns.corporation.getResearchCost(division.name, marketTAII);
 
 		if (division.research > researchCost * 1.1) {
 			ns.print(division.name + " Research " + marketTAI);
@@ -247,6 +251,7 @@ function doResearch(ns, division) {
 	}
 }
 
+/** @param {NS} ns **/
 function newProduct(ns, division) {
 	//ns.print("Products: " + division.products);
 	var productNumbers = [];
@@ -297,7 +302,7 @@ function newProduct(ns, division) {
 	var productInvest = 1e9;
 	if (ns.corporation.getCorporation().funds < (2 * productInvest)) {
 		if (ns.corporation.getCorporation().funds <= 0) {
-			ns.print("WARN negative funds, cannot start new product development " + ns.nFormat(ns.corporation.getCorporation().funds, "0.0a"));
+			ns.print("WARN negative funds, cannot start new product development " + ns.formatNumber(ns.corporation.getCorporation().funds));
 			return;
 			// productInvest = 0; // product development with 0 funds not possible if corp has negative funds
 		}
@@ -309,7 +314,8 @@ function newProduct(ns, division) {
 	ns.corporation.makeProduct(division.name, "Sector-12", newProductName, productInvest, productInvest);
 }
 
-async function initCities(ns, division, productCity = "Sector-12") {
+/** @param {NS} ns **/
+function initCities(ns, division, productCity = "Sector-12") {
 	for (const city of cities) {
 		ns.print("Expand " + division.name + " to City " + city);
 		if (!division.cities.includes(city)) {
@@ -322,9 +328,9 @@ async function initCities(ns, division, productCity = "Sector-12") {
 		if (city != productCity) {
 			// setup employees
 			for (let i = 0; i < 3; i++) {
-				await ns.corporation.hireEmployee(division.name, city);
+				ns.corporation.hireEmployee(division.name, city);
 			}
-			await ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", 3);
+			ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", 3);
 		}
 		else {
 			const warehouseUpgrades = 3;
@@ -336,11 +342,11 @@ async function initCities(ns, division, productCity = "Sector-12") {
 			const newEmployees = 9;
 			ns.corporation.upgradeOfficeSize(division.name, productCity, newEmployees);
 			for (let i = 0; i < newEmployees + 3; i++) {
-				await ns.corporation.hireEmployee(division.name, productCity);
+				ns.corporation.hireEmployee(division.name, productCity);
 			}
-			await ns.corporation.setAutoJobAssignment(division.name, productCity, "Operations", 4);
-			await ns.corporation.setAutoJobAssignment(division.name, productCity, "Engineer", 6);
-			await ns.corporation.setAutoJobAssignment(division.name, productCity, "Management", 2);
+			ns.corporation.setAutoJobAssignment(division.name, productCity, "Operations", 4);
+			ns.corporation.setAutoJobAssignment(division.name, productCity, "Engineer", 6);
+			ns.corporation.setAutoJobAssignment(division.name, productCity, "Management", 2);
 		}
 		const warehouseUpgrades = 3;
 		for (let i = 0; i < warehouseUpgrades; i++) {
@@ -351,7 +357,8 @@ async function initCities(ns, division, productCity = "Sector-12") {
 	ns.corporation.makeProduct(division.name, productCity, "Product-0", "1e9", "1e9");
 }
 
-async function initialCorpUpgrade(ns) {
+/** @param {NS} ns **/
+function initialCorpUpgrade(ns) {
 	ns.print("unlock upgrades");
 	ns.corporation.unlockUpgrade("Smart Supply");
 	ns.corporation.levelUpgrade("Smart Storage");

@@ -23,8 +23,8 @@ export async function main(ns) {
 
 	if (ns.getServerMaxRam("home") >= 64 && !ns.isRunning(upgradeScriptName, "home")) {
 		ns.run(upgradeScriptName);
-		if (tix) ns.run(stockName);
-		else ns.run(earlyStockName);
+		if (tix) ns.tail(ns.run(stockName));
+		else ns.tail(ns.run(earlyStockName));
 	}
 
 	if (ns.getServerMaxRam("home") >= 256 && !ns.isRunning(actionScriptName, "home")) {
@@ -32,6 +32,6 @@ export async function main(ns) {
 	}
 
 	if (!ns.isRunning(deployScriptName, "home")) {
-		ns.run(deployScriptName, { threads: 1, spawnDelay: 100 });
+		ns.tail(ns.run(deployScriptName, { threads: 1, spawnDelay: 100 }));
 	}
 }

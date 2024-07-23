@@ -1,10 +1,13 @@
 // file: upgrade-servers.js
 
+import { requestFunds } from "playerAction.js"
 /** @param {NS} ns **/
 export async function main(ns) {
 	// Disable default Logging
 	ns.disableLog("ALL");
 
+	const stockValuePort = ns.getPortHandle(4);
+	const stockActionPort = ns.getPortHandle(5);
 	var notAllServersMaxed = true;
 	const ramLimit = ns.getPurchasedServerMaxRam();
 	var maxPurchaseableRam = ns.getServerMaxRam("home") / 2;  // we would not buy less than half home RAM
@@ -13,7 +16,8 @@ export async function main(ns) {
 	}
 	ns.print("Initial RAM tier: " + ns.formatRam(maxPurchaseableRam));
 	while (notAllServersMaxed) {
-		var homeMoney = ns.getServerMoneyAvailable("home");
+		var stockValue = stockValuePort.peek() === "NULL PORT DATA" ? 0 : stockValuePort.peek();
+		var player = ns.getPlayer();
 		var ownedServers = ns.getPurchasedServers();
 		ownedServers.sort((a, b) => ns.getServerMaxRam(b) - ns.getServerMaxRam(a));
 		if (ownedServers.length > 0) {
@@ -25,10 +29,11 @@ export async function main(ns) {
 
 		// see if we can afford a higher RAM tier than we already have
 		while (maxPurchaseableRam < ramLimit) {
+			player = ns.getPlayer();
 			// check for quadruple RAM for not too big jumps and buffer for another potential double RAM afterwards below
-			var nextRamTier = maxPurchaseableRam * 4;  
+			var nextRamTier = maxPurchaseableRam * 4;
 			var nextRamTierCost = ns.getPurchasedServerCost(nextRamTier);
-			if (homeMoney > nextRamTierCost) {
+			if (player.money + stockValue * 0.5 > nextRamTierCost) {
 				// double RAM
 				maxPurchaseableRam *= 2;
 			}
@@ -37,7 +42,8 @@ export async function main(ns) {
 			}
 		}
 
-		while (ownedServers.length < ns.getPurchasedServerLimit() && homeMoney > ramUpgradeCost) {
+		while (ownedServers.length < ns.getPurchasedServerLimit()) {
+			player = ns.getPlayer();
 			if ((ownedServers.length == 7 || ownedServers.length == 14 || ownedServers.length == 21) && maxPurchaseableRam * 2 < ramLimit) {
 				// switch to a higher RAM tier after 10 servers, so we got the second 10 at 50% and the last 5 at 25%
 				// - make a substantial impact (the increase would be < 10%)
@@ -48,11 +54,12 @@ export async function main(ns) {
 				ramUpgradeCost = ns.getPurchasedServerCost(maxPurchaseableRam);
 			}
 
-			// ns.print("money: " + Math.round(homeMoney / 1000000) + "m cost: " + Math.round(ramUpgradeCost / 1000000) + " m")
-			if (homeMoney > ramUpgradeCost) {
+			// ns.print("money: " + Math.round(ns.getPlayer().money / 1000000) + "m cost: " + Math.round(ramUpgradeCost / 1000000) + " m")
+			if (await requestFunds(ns, player, ramUpgradeCost)) {
 				const newServer = ns.purchaseServer("pserv-" + ownedServers.length, maxPurchaseableRam);
+				stockActionPort.write(JSON.stringify(['ACK', true]));
+				if (newServer == "") continue;
 				ownedServers.push(newServer);
-				homeMoney = ns.getServerMoneyAvailable("home");
 				ns.print("Purchased Server " + newServer + " with " + ns.formatRam(maxPurchaseableRam) + " RAM for " + ns.formatNumber(ramUpgradeCost));
 				ns.tprint("Purchased Server " + newServer + " with " + ns.formatRam(maxPurchaseableRam) + " RAM for " + ns.formatNumber(ramUpgradeCost));
 			}
@@ -63,7 +70,8 @@ export async function main(ns) {
 		//ns.print("maxPurchaseableRam: " + maxPurchaseableRam)
 		//ns.print("RamCost: " + ns.getPurchasedServerCost(maxPurchaseableRam))
 
-		while (ownedServers.length > 0 && homeMoney > ramUpgradeCost) {
+		while (ownedServers.length > 0 && player.money + stockValue * 0.5 > ramUpgradeCost) {
+			player = ns.getPlayer();
 			var upgradeServer = ownedServers.pop();
 			var upgradeServerRAM = ns.getServerMaxRam(upgradeServer);
 			if (upgradeServerRAM >= ramLimit) {
@@ -88,21 +96,23 @@ export async function main(ns) {
 						maxPurchaseableRam *= 2;
 						ramUpgradeCost = ns.getPurchasedServerCost(maxPurchaseableRam);
 						ns.print("Double RAM tier: " + ns.formatRam(maxPurchaseableRam));
-						if (homeMoney < ramUpgradeCost) {
+						if (player.money + stockValue * 0.5 < ramUpgradeCost) {
 							// we should switch to a higher RAM tier but cannot afford it. Wait for more money.
 							return;
 						}
 					}
 				}
-				ns.print("Upgrade server " + upgradeServer + " RAM from " + ns.formatRam(upgradeServerRAM) + " to " + ns.formatRam(maxPurchaseableRam) + " for " + ns.formatNumber(ramUpgradeCost));
-				ns.tprint("Upgrade server " + upgradeServer + " RAM from " + ns.formatRam(upgradeServerRAM) + " to " + ns.formatRam(maxPurchaseableRam) + " for " + ns.formatNumber(ramUpgradeCost));
-				ns.killall(upgradeServer);
-				ns.deleteServer(upgradeServer);
-				ns.purchaseServer(upgradeServer, maxPurchaseableRam);
-				homeMoney = ns.getServerMoneyAvailable("home");
-
+				if (await requestFunds(ns, player, ramUpgradeCost)) {
+					ns.print(`Upgrade server ${upgradeServer} RAM from ${ns.formatRam(upgradeServerRAM)} to ${ns.formatRam(maxPurchaseableRam)} for ${ns.formatNumber(ramUpgradeCost)}`);
+					ns.tprint(`Upgrade server ${upgradeServer} RAM from ${ns.formatRam(upgradeServerRAM)} to ${ns.formatRam(maxPurchaseableRam)} for ${ns.formatNumber(ramUpgradeCost)}`);
+					ns.killall(upgradeServer);
+					ns.deleteServer(upgradeServer);
+					const newServer = ns.purchaseServer(upgradeServer, maxPurchaseableRam);
+					stockActionPort.write(JSON.stringify(['ACK', true]));
+					if (newServer == "") continue;
+				}
 			}
-
+			player = ns.getPlayer();
 		}
 		await ns.sleep(5 * 1000);
 	}

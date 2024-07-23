@@ -3,7 +3,7 @@
 // does not require 4s Market Data TIX API Access
 
 // defines if stocks can be shorted (see BitNode 8)
-const shortAvailable = true;
+const shortAvailable = false;
 
 const commission = 100000;
 const samplingLength = 30;
@@ -45,6 +45,8 @@ function posNegRatio(samples) {
 /** @param {NS} ns */
 export async function main(ns) {
   ns.disableLog("ALL");
+  const msPerStockUpdate = ns.stock.getConstants().msPerStockUpdate;
+  const msPerStockUpdateMin = ns.stock.getConstants().msPerStockUpdateMin;
   let symLastPrice = {};
   let symChanges = {};
   for (const sym of ns.stock.getSymbols()) {
@@ -53,7 +55,9 @@ export async function main(ns) {
   }
 
   while (true) {
-    await ns.sleep(2000);
+    const bonusTime = ns.stock.getBonusTime();
+    const sleepTime = bonusTime > 0 ? msPerStockUpdateMin : msPerStockUpdate;
+    await ns.sleep(sleepTime);
 
     if (symLastPrice['FSIG'] === ns.stock.getPrice('FSIG')) {
       continue;

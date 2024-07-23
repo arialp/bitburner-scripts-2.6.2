@@ -3,7 +3,7 @@
 // requires 4s Market Data TIX API Access
 
 // defines if stocks can be shorted (see BitNode 8)
-const shortAvailable = true;
+const shortAvailable = false;
 const commission = 100000;
 
 /** @param {NS} ns */
@@ -146,6 +146,8 @@ async function tendStocks(ns) {
 				await stockActionPort.nextWrite();
 				const [newSignal, newPayload] = JSON.parse(stockActionPort.read());
 				if (newSignal === 'ACK' && newPayload) {
+					stockValuePort.clear();
+					stockValuePort.write(0);
 					ns.exit();
 				}
 
