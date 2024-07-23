@@ -11,7 +11,7 @@ var hackMoneyRatio = 0.1;
 var maxParallelAttacks = 50;
 
 // time to wait between checking and calculating new attacks (in ms) 
-const waitTimeBetweenManagementCycles = 1000;
+const waitTimeBetweenManagementCycles = 2000;
 
 // time difference between finishing [ hack - grow - weaken ] in burst attacks (in ms)
 const timeDiff = 200;
@@ -43,7 +43,7 @@ const files = [weakenScriptName, growScriptName, hackScriptName];
 // Backdoor script hooked in (requires singluarity functions SF4.1)
 const singularityFunctionsAvailable = true;
 const backdoorScript = "backdoor.js"
-const backdoorScriptRam = ns.getScriptRam("backdoor.js", "home");
+const backdoorScriptRam = 65.8;
 
 // Solve Contract Script hooked in 
 const solveContractsScript = "solve-contracts.js";
@@ -101,7 +101,7 @@ export async function main(ns) {
 
 	while (true) {
 		// scan and nuke all accesible servers
-		servers = await scanAndNuke(ns);
+		servers = scanAndNuke(ns);
 		// ns.print(`servers:${[...servers.values()]}`)
 
 		for (var server of servers) {
@@ -633,7 +633,6 @@ function xpAttackOngoing(ns, servers, target, weakSleep) {
 // filter and sort the list for hackable servers
 /** @param {NS} ns */
 function getHackable(ns, servers) {
-
 	var sortedServers = [...servers.values()].filter(server => ns.getServerMaxMoney(server) > 100000 &&
 		ns.getServerRequiredHackingLevel(server) <= ns.getHackingLevel() &&
 		ns.getServerGrowth(server) > 1 && server != "n00dles").sort((a, b) =>
@@ -644,7 +643,6 @@ function getHackable(ns, servers) {
 		// prioritize a server which we have not initialized yet
 		sortedServers.unshift(partialWeakGrow);
 	}
-
 	return sortedServers
 
 	//.sort((a, b) => 5 * ns.getServerMinSecurityLevel(a) - 5 * ns.getServerMinSecurityLevel(b)
@@ -692,7 +690,7 @@ function getFreeRam(ns, servers) {
 
 // scan all servers from home and nuke them if we can
 /** @param {NS} ns */
-async function scanAndNuke(ns) {
+function scanAndNuke(ns) {
 	let servers = new Set(["home"]);
 	scanAll(ns, "home", servers);
 	var accessibleServers = new Set();
@@ -700,32 +698,32 @@ async function scanAndNuke(ns) {
 		if (server.startsWith("hacknet-node")) {
 			continue;
 		} // for BitNode 9 to permit hacking on the Hacknet Servers
-		if (await ns.hasRootAccess(server)) {
+		if (ns.hasRootAccess(server)) {
 			accessibleServers.add(server)
 		} else {
 			var portOpened = 0;
-			if (await ns.fileExists("BruteSSH.exe")) {
-				await ns.brutessh(server);
+			if (ns.fileExists("BruteSSH.exe")) {
+				ns.brutessh(server);
 				portOpened++;
 			}
-			if (await ns.fileExists("FTPCrack.exe")) {
-				await ns.ftpcrack(server);
+			if (ns.fileExists("FTPCrack.exe")) {
+				ns.ftpcrack(server);
 				portOpened++;
 			}
-			if (await ns.fileExists("HTTPWorm.exe")) {
-				await ns.httpworm(server);
+			if (ns.fileExists("HTTPWorm.exe")) {
+				ns.httpworm(server);
 				portOpened++;
 			}
-			if (await ns.fileExists("relaySMTP.exe")) {
-				await ns.relaysmtp(server);
+			if (ns.fileExists("relaySMTP.exe")) {
+				ns.relaysmtp(server);
 				portOpened++;
 			}
-			if (await ns.fileExists("SQLInject.exe")) {
-				await ns.sqlinject(server);
+			if (ns.fileExists("SQLInject.exe")) {
+				ns.sqlinject(server);
 				portOpened++;
 			}
-			if (await ns.getServerNumPortsRequired(server) <= portOpened) {
-				await ns.nuke(server);
+			if (ns.getServerNumPortsRequired(server) <= portOpened) {
+				ns.nuke(server);
 				accessibleServers.add(server);
 			}
 		}

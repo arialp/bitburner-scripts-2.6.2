@@ -4,7 +4,7 @@ export async function main(ns) {
 	const cur = ns.singularity.getCurrentServer();
 
 	var networkPath = [cur];
-	var networkPath = scanAll(ns, cur, target, networkPath);
+	var networkPath = scanAll(ns, cur, target, networkPath) ?? [];
 
 	for (var server of networkPath) {
 		ns.singularity.connect(server);
