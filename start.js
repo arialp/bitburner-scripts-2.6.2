@@ -5,29 +5,35 @@ export async function main(ns) {
 	const getRamScriptName = "get-ram-usage.js"
 	const ipvgoScriptName = "ipvgo.js";
 	const upgradeScriptName = "upgrade-servers.js";
+	const corpScriptName = "corp.js";
 	const earlyStockName = "early-stock-trader.js";
 	const stockName = "stock-trader.js";
 	const actionScriptName = "playerAction.js";
 	const deployScriptName = "distributed-hack.js";
 
 	const tix = ns.stock.has4SDataTIXAPI();
+	const ram = ns.getServerMaxRam("home");
 
-	if (ns.getServerMaxRam("home") > 16 && !ns.isRunning(hudScriptName, "home")) {
+	if (ram > 16 && !ns.isRunning(hudScriptName, "home")) {
 		ns.run(hudScriptName);
 		ns.run(getRamScriptName);
 	}
 
-	if (ns.getServerMaxRam("home") > 32 && !ns.isRunning(ipvgoScriptName, "home")) {
+	if (ram > 32 && !ns.isRunning(ipvgoScriptName, "home")) {
 		ns.run(ipvgoScriptName);
 	}
 
-	if (ns.getServerMaxRam("home") >= 64 && !ns.isRunning(upgradeScriptName, "home")) {
+	if (ram >= 64 && !ns.isRunning(upgradeScriptName, "home")) {
 		ns.run(upgradeScriptName);
 		if (tix) ns.tail(ns.run(stockName));
 		else ns.tail(ns.run(earlyStockName));
 	}
 
-	if (ns.getServerMaxRam("home") >= 256 && !ns.isRunning(actionScriptName, "home")) {
+	if (ram >= 1024 && !ns.isRunning(corpScriptName, "home")) {
+		ns.tail(ns.run(corpScriptName));
+	}
+
+	if (ram >= 2048 && !ns.isRunning(actionScriptName, "home")) {
 		ns.tail(ns.run(actionScriptName));
 	}
 
