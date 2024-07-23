@@ -1,4 +1,4 @@
-var estimatedRepPerSecond = 0;
+var estimatedRepPerSecond = 1;
 /** @param {NS} ns **/
 export async function main(ns) {
 	ns.disableLog("ALL");
@@ -834,7 +834,7 @@ function favorReset(ns, goalRep) {
 
 	const favor = ns.singularity.getFactionFavor(factionName);
 	const rep = ns.singularity.getFactionRep(factionName);
-	const repGain = hasFormulas ? ns.formulas.work.factionGains(player, workType, favor).reputation * 5 : 1.515;
+	const repGain = hasFormulas ? ns.formulas.work.factionGains(player, workType, favor).reputation * 5 : estimatedRepPerSecond;
 
 	if (favor >= ns.getFavorToDonate()) return false;
 
