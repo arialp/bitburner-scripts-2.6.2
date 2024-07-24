@@ -37,10 +37,9 @@ export async function main(ns) {
 		await upgradeHomeServer(ns);
 		const end = new Date();
 		const timeSlept = end.getTime() - start.getTime();
-
 		let extraSleep = 0;
 		let prevERPS = estimatedRepPerSecond;
-		estimatedRepPerSecond = 0;
+		estimatedRepPerSecond = 1;
 		let thresholdCount = 0;
 		const thresholdLimit = 3;
 		const threshold = prevERPS * 0.05;
@@ -72,16 +71,15 @@ export async function main(ns) {
 		const sleepTime = 5000 - timeSlept - extraSleep;
 
 
-		const factionsForReputation = getFactionsForReputation(ns, player);
+		const factionsForReputation = getFactionsForReputation(ns);
 		ns.print("Factions for Reputation: " + [...factionsForReputation.keys()]);
 
-		const actionUseful = currentActionUseful(ns, player, factionsForReputation);
+		const actionUseful = currentActionUseful(ns, factionsForReputation);
 		ns.print("Current action useful: " + actionUseful);
 
 		if (!actionUseful) {
-			chooseAction(ns, player, factionsForReputation);
+			chooseAction(ns, factionsForReputation);
 		}
-
 		await ns.sleep(Math.max(100, sleepTime));
 	}
 }
@@ -210,7 +208,8 @@ export async function getPrograms(ns) {
  * @param {Map} factions
  * @returns {number} The adjusted sleep time
  **/
-function chooseAction(ns, player, factions) {
+function chooseAction(ns, factions) {
+	const player = ns.getPlayer();
 	const focus = ns.singularity.isFocused();
 	const currentWork = ns.singularity.getCurrentWork();
 	if (ns.getHackingLevel() < studyUntilHackLevel) {
@@ -262,7 +261,8 @@ function applyForPromotion(ns, corp) {
  * @param {Map} factionsForReputation 
  * @returns {boolean}
  **/
-function currentActionUseful(ns, player, factions) {
+function currentActionUseful(ns, factions) {
+	const player = ns.getPlayer();
 	const playerControlPort = ns.getPortHandle(3);
 	const currentWork = ns.singularity.getCurrentWork();
 	if (currentWork && currentWork.type == "FACTION") {
@@ -332,7 +332,8 @@ function currentActionUseful(ns, player, factions) {
  * @param {Player} player
  * @returns {Map<string, number>}
  **/
-function getFactionsForReputation(ns, player) {
+function getFactionsForReputation(ns) {
+	const player = ns.getPlayer();
 	const factionsWithAugmentations = new Map();
 	for (const faction of player.factions) {
 		if (faction === 'Shadows of Anarchy') continue;
@@ -459,30 +460,31 @@ export async function buyAugments(ns, augmentationCostMultiplier) {
 	}
 	ns.print(`${RED}Current augmentation purchase cost: ${ns.formatNumber(totalCost) + RESET}\n`);
 
-	if (augmentationNameEnumMembers.includes(goalAugmentation) && factionEnumMembers.includes(goalAugmentationFaction)) {
-		const repNow = ns.singularity.getFactionRep(goalAugmentationFaction);
-		const goalAugRep = ns.singularity.getAugmentationRepReq(goalAugmentation);
-		const hasEnoughFavor = ns.singularity.getFactionFavor(goalAugmentationFaction) >= ns.getFavorToDonate();
-		const notEnoughRepForGoal = repNow < goalAugRep;
-		if (notEnoughRepForGoal && !hasEnoughFavor) {
-			var isFasterToReset = favorReset(ns, goalAugRep);
-		}
-
-		if (notEnoughRepForGoal && hasEnoughFavor) {
-			const moneyNeeded = getMoneyForReputation(ns, goalAugmentationFaction, goalAugRep, repNow);
-
-			if (moneyNeeded > 0) {
-				ns.print(`Donation Goal: ${ns.formatNumber(moneyNeeded)}`);
-				if (await requestFunds(ns, moneyNeeded)) {
-					const donationSuccess = ns.singularity.donateToFaction(goalAugmentationFaction, moneyNeeded);
-					if (donationSuccess) {
-						ns.print(`SUCCESS Donated ${ns.formatNumber(moneyNeeded)} to ${goalAugmentationFaction}`);
-						ns.toast(`Donated ${ns.formatNumber(moneyNeeded)} to ${goalAugmentationFaction}`, "success", 5000);
-					} else {
-						ns.print(`ERROR Could not donate to ${goalAugmentationFaction}!`);
-						ns.toast(`Could not donate to ${goalAugmentationFaction}!`, "error", 5000);
+	const factions = getFactionsForReputation(ns);
+	const currentWork = ns.singularity.getCurrentWork();
+	if (currentWork && currentWork.type == "FACTION") {
+		const repFaction = currentWork.factionName;
+		if (factions.has(repFaction)) {
+			const repNow = ns.singularity.getFactionRep(repFaction)
+			const reqRep = factions.get(repFaction) + repNow;
+			const hasEnoughFavor = ns.singularity.getFactionFavor(repFaction) >= ns.getFavorToDonate();
+			if (!hasEnoughFavor) {
+				var isFasterToReset = favorReset(ns, reqRep);
+			} else {
+				const moneyNeeded = getMoneyForReputation(ns, repFaction, reqRep, repNow)
+				if (moneyNeeded > 0) {
+					ns.print(`Donation Goal: ${ns.formatNumber(moneyNeeded)}`);
+					if (await requestFunds(ns, moneyNeeded)) {
+						const donationSuccess = ns.singularity.donateToFaction(repFaction, moneyNeeded);
+						if (donationSuccess) {
+							ns.print(`SUCCESS Donated ${ns.formatNumber(moneyNeeded)} to ${repFaction}`);
+							ns.toast(`Donated ${ns.formatNumber(moneyNeeded)} to ${repFaction}`, "success", 5000);
+						} else {
+							ns.print(`ERROR Could not donate to ${repFaction}!`);
+							ns.toast(`Could not donate to ${repFaction}!`, "error", 5000);
+						}
+						stockActionPort.write(JSON.stringify(['ACK', donationSuccess]));
 					}
-					stockActionPort.write(JSON.stringify(['ACK', donationSuccess]));
 				}
 			}
 		}
@@ -496,7 +498,7 @@ export async function buyAugments(ns, augmentationCostMultiplier) {
 	player = ns.getPlayer();
 	playerFactions = player.factions;
 	const fluxFaction = playerFactions.length > 0 ? playerFactions.find(faction => ns.singularity.getAugmentationsFromFaction(faction).includes("NeuroFlux Governor") && ns.singularity.getFactionRep(faction) >= fluxRep) : undefined;
-	
+
 	// check if player wants to force reset
 	if (forceResetPort.read() === "RESET") {
 		forceReset = await ns.prompt(`Manual reset triggered: Are you sure?`, { type: "boolean", choices: ["Yes", "No"] });

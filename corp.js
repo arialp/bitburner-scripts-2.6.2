@@ -1,9 +1,18 @@
 /** @param {NS} ns **/
 export async function main(ns) {
-	ns.disableLog("disableLog"); ns.disableLog("sleep");
-
-	if (!ns.getPlayer().hasCorporation) {
-		if(!ns.corporation.createCorporation("MyCorp")) return;
+	ns.disableLog("ALL");
+	const stockValuePort = ns.getPortHandle(4);
+	let stockValue = stockValuePort.peek() == "NULL PORT DATA" ? 0 : stockValuePort.peek();
+	let player = ns.getPlayer();
+	while (!ns.corporation.hasCorporation()) {
+		stockValue = stockValuePort.peek() == "NULL PORT DATA" ? 0 : stockValuePort.peek();
+		player = ns.getPlayer();
+		if (player.money + stockValue * 0.5 > 150e9) {
+			ns.corporation.createCorporation("MyCorp");
+		} else {
+			ns.print("Not enough money to start a corporation, waiting until $150,000,000,000");
+			await ns.sleep(60000);
+		}
 	}
 	var corp = ns.corporation.getCorporation();
 	if (corp.divisions.length < 1) {
@@ -17,14 +26,17 @@ export async function main(ns) {
 	while (true) {
 		corp = ns.corporation.getCorporation();
 		for (const division of corp.divisions.reverse()) {
+			expandCities(ns, division);
 			upgradeWarehouses(ns, division);
 			upgradeCorp(ns);
 			hireEmployees(ns, division);
-			newProduct(ns, division);
+			if (ns.corporation.getDivision(division).type === "Tobacco") {
+				newProduct(ns, division);
+			}
 			doResearch(ns, division);
 		}
 		if (corp.divisions.length < 2 && corp.numShares == corp.totalShares) {
-			if (corp.divisions[0].products.length > 2) {
+			if (ns.corporation.getDivision(corp.divisions[0]).products.length > 2) {
 				await trickInvest(ns, corp.divisions[0]);
 			}
 		}
@@ -34,51 +46,59 @@ export async function main(ns) {
 
 /** @param {NS} ns **/
 function hireEmployees(ns, division, productCity = "Sector-12") {
-	var employees = ns.corporation.getOffice(division.name, productCity).employees.length;
-	while (ns.corporation.getCorporation().funds > (cities.length * ns.corporation.getOfficeSizeUpgradeCost(division.name, productCity, 3))) {
+	var employees = ns.corporation.getOffice(division, productCity).numEmployees;
+	while (ns.corporation.getCorporation().funds > (cities.length * ns.corporation.getOfficeSizeUpgradeCost(division, productCity, 3))) {
 		// upgrade all cities + 3 employees if sufficient funds
-		ns.print(division.name + " Upgrade office size");
+		ns.print(division + " Upgrade office size");
 		for (const city of cities) {
-			ns.corporation.upgradeOfficeSize(division.name, city, 3);
+			ns.corporation.upgradeOfficeSize(division, city, 3);
 			for (var i = 0; i < 3; i++) {
-				ns.corporation.hireEmployee(division.name, city);
+				ns.corporation.hireEmployee(division, city);
 			}
 		}
 	}
-	if (ns.corporation.getOffice(division.name, productCity).employees.length > employees) {
+	if (ns.corporation.getOffice(division, productCity).numEmployees >= employees) {
 		// set jobs after hiring people just in case we hire lots of people at once and setting jobs is slow
 		for (const city of cities) {
-			employees = ns.corporation.getOffice(division.name, city).employees.length;
-			if (ns.corporation.hasResearched(division.name, "Market-TA.II")) {
+			employees = ns.corporation.getOffice(division, city).numEmployees;
+			if (ns.corporation.hasResearched(division, "Market-TA.II")) {
 				// TODO: Simplify here. ProductCity config can always be used
 				if (city == productCity) {
-					ns.corporation.setAutoJobAssignment(division.name, city, "Operations", Math.ceil(employees / 5));
-					ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", Math.ceil(employees / 5));
-					ns.corporation.setAutoJobAssignment(division.name, city, "Business", Math.ceil(employees / 5));
-					ns.corporation.setAutoJobAssignment(division.name, city, "Management", Math.ceil(employees / 10));
-					var remainingEmployees = employees - (3 * Math.ceil(employees / 5) + Math.ceil(employees / 10));
-					ns.corporation.setAutoJobAssignment(division.name, city, "Training", Math.ceil(remainingEmployees));
+					try {
+						ns.corporation.setAutoJobAssignment(division, city, "Operations", Math.ceil(employees / 5));
+						ns.corporation.setAutoJobAssignment(division, city, "Engineer", Math.ceil(employees / 5));
+						ns.corporation.setAutoJobAssignment(division, city, "Business", Math.ceil(employees / 5));
+						ns.corporation.setAutoJobAssignment(division, city, "Management", Math.ceil(employees / 10));
+						var remainingEmployees = employees - (3 * Math.ceil(employees / 5) + Math.ceil(employees / 10));
+						ns.corporation.setAutoJobAssignment(division, city, "Training", Math.ceil(remainingEmployees));
+					} catch (e) {}
 				}
 				else {
-					ns.corporation.setAutoJobAssignment(division.name, city, "Operations", Math.floor(employees / 10));
-					ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", 1);
-					ns.corporation.setAutoJobAssignment(division.name, city, "Business", Math.floor(employees / 5));
-					ns.corporation.setAutoJobAssignment(division.name, city, "Management", Math.ceil(employees / 100));
-					ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", Math.ceil(employees / 2));
-					var remainingEmployees = employees - (Math.floor(employees / 5) + Math.floor(employees / 10) + 1 + Math.ceil(employees / 100) + Math.ceil(employees / 2));
-					ns.corporation.setAutoJobAssignment(division.name, city, "Training", Math.floor(remainingEmployees));
+					try{
+						ns.corporation.setAutoJobAssignment(division, city, "Operations", Math.floor(employees / 10));
+						ns.corporation.setAutoJobAssignment(division, city, "Engineer", 1);
+						ns.corporation.setAutoJobAssignment(division, city, "Business", Math.floor(employees / 5));
+						ns.corporation.setAutoJobAssignment(division, city, "Management", Math.ceil(employees / 100));
+						ns.corporation.setAutoJobAssignment(division, city, "Research & Development", Math.ceil(employees / 2));
+						var remainingEmployees = employees - (Math.floor(employees / 5) + Math.floor(employees / 10) + 1 + Math.ceil(employees / 100) + Math.ceil(employees / 2));
+						ns.corporation.setAutoJobAssignment(division, city, "Training", Math.floor(remainingEmployees));
+					} catch (e) {}
 				}
 			}
 			else {
 				if (city == productCity) {
-					ns.corporation.setAutoJobAssignment(division.name, city, "Operations", Math.floor((employees - 2) / 2));
-					ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", Math.ceil((employees - 2) / 2));
-					ns.corporation.setAutoJobAssignment(division.name, city, "Management", 2);
+					try {
+						ns.corporation.setAutoJobAssignment(division, city, "Operations", Math.floor((employees - 2) / 2));
+						ns.corporation.setAutoJobAssignment(division, city, "Engineer", Math.ceil((employees - 2) / 2));
+						ns.corporation.setAutoJobAssignment(division, city, "Management", 2);
+					} catch (e) {}
 				}
 				else {
-					ns.corporation.setAutoJobAssignment(division.name, city, "Operations", 1);
-					ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", 1);
-					ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", (employees - 2));
+					try {
+						ns.corporation.setAutoJobAssignment(division, city, "Operations", 1);
+						ns.corporation.setAutoJobAssignment(division, city, "Engineer", 1);
+						ns.corporation.setAutoJobAssignment(division, city, "Research & Development", (employees - 2));
+					} catch (e) {}
 				}
 			}
 		}
@@ -86,22 +106,50 @@ function hireEmployees(ns, division, productCity = "Sector-12") {
 }
 
 /** @param {NS} ns **/
+function expandCities(ns, division) {
+	for (const city of cities) {
+		// check this city has a warehouse
+		if (!ns.corporation.hasWarehouse(division, city) && ns.corporation.getConstants().officeInitialCost < ns.corporation.getCorporation().funds) {
+			ns.print(division + " Expanding to city " + city);
+			ns.corporation.expandCity(division, city);
+		} else {
+			continue;
+		}
+	}
+}
+
+/** @param {NS} ns **/
 function upgradeWarehouses(ns, division) {
 	for (const city of cities) {
+		// check this city has been expanded in to
+		if (!ns.corporation.getDivision(division).cities.includes(city)) {
+			continue;
+		}
+
+		// check this city has a warehouse and purchase if possible
+		if (!ns.corporation.hasWarehouse(division, city)) {
+			if (ns.corporation.getConstants().warehouseInitialCost < ns.corporation.getCorporation().funds) {
+				ns.print(division + " Purchasing a warehouse in " + city);
+				ns.corporation.purchaseWarehouse(division, city);
+			} else {
+				// no warehouse and can't afford one
+				continue;
+			}
+		}
 		// check if warehouses are near max capacity and upgrade if needed
-		var cityWarehouse = ns.corporation.getWarehouse(division.name, city);
+		var cityWarehouse = ns.corporation.getWarehouse(division, city);
 		if (cityWarehouse.sizeUsed > 0.9 * cityWarehouse.size) {
-			if (ns.corporation.getCorporation().funds > ns.corporation.getUpgradeWarehouseCost(division.name, city)) {
-				ns.print(division.name + " Upgrade warehouse in " + city);
-				ns.corporation.upgradeWarehouse(division.name, city);
+			if (ns.corporation.getCorporation().funds > ns.corporation.getUpgradeWarehouseCost(division, city)) {
+				ns.print(division + " Upgrade warehouse in " + city);
+				ns.corporation.upgradeWarehouse(division, city);
 			}
 		}
 	}
 	if (ns.corporation.getUpgradeLevel("Wilson Analytics") > 20) {
 		// Upgrade AdVert.Inc after a certain amount of Wilson Analytivs upgrades are available
-		if (ns.corporation.getCorporation().funds > (4 * ns.corporation.getHireAdVertCost(division.name))) {
-			ns.print(division.name + " Hire AdVert");
-			ns.corporation.hireAdVert(division.name);
+		if (ns.corporation.getCorporation().funds > (4 * ns.corporation.getHireAdVertCost(division))) {
+			ns.print(division + " Hire AdVert");
+			ns.corporation.hireAdVert(division);
 		}
 	}
 }
@@ -118,34 +166,34 @@ function upgradeCorp(ns) {
 			}
 		}
 	}
-	if (!ns.corporation.hasUnlockUpgrade("Shady Accounting") && ns.corporation.getUnlockUpgradeCost("Shady Accounting") * 2 < ns.corporation.getCorporation().funds) {
+	if (!ns.corporation.hasUnlock("Shady Accounting") && ns.corporation.getUnlockCost("Shady Accounting") * 2 < ns.corporation.getCorporation().funds) {
 		ns.print("Unlock Shady Accounting")
-		ns.corporation.unlockUpgrade("Shady Accounting");
+		ns.corporation.purchaseUnlock("Shady Accounting");
 	}
-	else if (!ns.corporation.hasUnlockUpgrade("Government Partnership") && ns.corporation.getUnlockUpgradeCost("Government Partnership") * 2 < ns.corporation.getCorporation().funds) {
+	else if (!ns.corporation.hasUnlock("Government Partnership") && ns.corporation.getUnlockCost("Government Partnership") * 2 < ns.corporation.getCorporation().funds) {
 		ns.print("Unlock Government Partnership")
-		ns.corporation.unlockUpgrade("Government Partnership");
+		ns.corporation.purchaseUnlock("Government Partnership");
 	}
 }
 
 /** @param {NS} ns **/
 async function trickInvest(ns, division, productCity = "Sector-12") {
 	ns.print("Prepare to trick investors")
-	for (var product of division.products) {
+	for (var product of ns.corporation.getDivision(division).products) {
 		// stop selling products
-		ns.corporation.sellProduct(division.name, productCity, product, "0", "MP", true);
+		ns.corporation.sellProduct(division, productCity, product, "0", "MP", true);
 	}
 
 	for (const city of cities) {
 		// put all employees into production to produce as fast as possible 
-		const employees = ns.corporation.getOffice(division.name, city).employees.length;
+		const employees = ns.corporation.getOffice(division, city).numEmployees;
 
-		ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", 0);
-		ns.corporation.setAutoJobAssignment(division.name, city, "Management", 0);
-		ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", 0);
-		ns.corporation.setAutoJobAssignment(division.name, city, "Operations", employees - 2); // workaround for bug
-		ns.corporation.setAutoJobAssignment(division.name, city, "Operations", employees - 1); // workaround for bug
-		ns.corporation.setAutoJobAssignment(division.name, city, "Operations", employees);
+		ns.corporation.setAutoJobAssignment(division, city, "Engineer", 0);
+		ns.corporation.setAutoJobAssignment(division, city, "Management", 0);
+		ns.corporation.setAutoJobAssignment(division, city, "Research & Development", 0);
+		ns.corporation.setAutoJobAssignment(division, city, "Operations", employees - 2); // workaround for bug
+		ns.corporation.setAutoJobAssignment(division, city, "Operations", employees - 1); // workaround for bug
+		ns.corporation.setAutoJobAssignment(division, city, "Operations", employees);
 	}
 
 	ns.print("Wait for warehouses to fill up")
@@ -154,7 +202,7 @@ async function trickInvest(ns, division, productCity = "Sector-12") {
 	while (!allWarehousesFull) {
 		allWarehousesFull = true;
 		for (const city of cities) {
-			if (ns.corporation.getWarehouse(division.name, city).sizeUsed <= (0.98 * ns.corporation.getWarehouse(division.name, city).size)) {
+			if (ns.corporation.getWarehouse(division, city).sizeUsed <= (0.98 * ns.corporation.getWarehouse(division, city).size)) {
 				allWarehousesFull = false;
 				break;
 			}
@@ -167,15 +215,15 @@ async function trickInvest(ns, division, productCity = "Sector-12") {
 	ns.print("Initial investmant offer: " + ns.formatNumber(initialInvestFunds));
 	for (const city of cities) {
 		// put all employees into business to sell as much as possible 
-		const employees = ns.corporation.getOffice(division.name, city).employees.length;
-		ns.corporation.setAutoJobAssignment(division.name, city, "Operations", 0);
-		ns.corporation.setAutoJobAssignment(division.name, city, "Business", employees - 2); // workaround for bug
-		ns.corporation.setAutoJobAssignment(division.name, city, "Business", employees - 1); // workaround for bug
-		ns.corporation.setAutoJobAssignment(division.name, city, "Business", employees);
+		const employees = ns.corporation.getOffice(division, city).numEmployees;
+		ns.corporation.setAutoJobAssignment(division, city, "Operations", 0);
+		ns.corporation.setAutoJobAssignment(division, city, "Business", employees - 2); // workaround for bug
+		ns.corporation.setAutoJobAssignment(division, city, "Business", employees - 1); // workaround for bug
+		ns.corporation.setAutoJobAssignment(division, city, "Business", employees);
 	}
-	for (var product of division.products) {
+	for (var product of ns.corporation.getDivision(division).products) {
 		// sell products again
-		ns.corporation.sellProduct(division.name, productCity, product, "MAX", "MP", true);
+		ns.corporation.sellProduct(division, productCity, product, "MAX", "MP", true);
 	}
 
 	while (ns.corporation.getInvestmentOffer().funds < (4 * initialInvestFunds)) {
@@ -192,16 +240,16 @@ async function trickInvest(ns, division, productCity = "Sector-12") {
 
 	for (const city of cities) {
 		// set employees back to normal operation
-		const employees = ns.corporation.getOffice(division.name, city).employees.length;
-		ns.corporation.setAutoJobAssignment(division.name, city, "Business", 0);
+		const employees = ns.corporation.getOffice(division, city).numEmployees;
+		ns.corporation.setAutoJobAssignment(division, city, "Business", 0);
 		if (city == productCity) {
-			ns.corporation.setAutoJobAssignment(division.name, city, "Operations", 1);
-			ns.corporation.setAutoJobAssignment(division.name, city, "Engineer", (employees - 2));
-			ns.corporation.setAutoJobAssignment(division.name, city, "Management", 1);
+			ns.corporation.setAutoJobAssignment(division, city, "Operations", 1);
+			ns.corporation.setAutoJobAssignment(division, city, "Engineer", (employees - 2));
+			ns.corporation.setAutoJobAssignment(division, city, "Management", 1);
 		}
 		else {
-			ns.corporation.setAutoJobAssignment(division.name, city, "Operations", 1);
-			ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", (employees - 1));
+			ns.corporation.setAutoJobAssignment(division, city, "Operations", 1);
+			ns.corporation.setAutoJobAssignment(division, city, "Research & Development", (employees - 1));
 		}
 	}
 
@@ -215,25 +263,25 @@ function doResearch(ns, division) {
 	const laboratory = "Hi-Tech R&D Laboratory"
 	const marketTAI = "Market-TA.I";
 	const marketTAII = "Market-TA.II";
-	if (!ns.corporation.hasResearched(division.name, laboratory)) {
+	if (!ns.corporation.hasResearched(division, laboratory)) {
 		// always research labaratory first
-		if (division.research > ns.corporation.getResearchCost(division.name, laboratory)) {
-			ns.print(division.name + " Research " + laboratory);
-			ns.corporation.research(division.name, laboratory);
+		if (division.research > ns.corporation.getResearchCost(division, laboratory)) {
+			ns.print(division + " Research " + laboratory);
+			ns.corporation.research(division, laboratory);
 		}
 	}
-	else if (!ns.corporation.hasResearched(division.name, marketTAII)) {
+	else if (!ns.corporation.hasResearched(division, marketTAII)) {
 		// always research Market-TA.I plus .II first and in one step
-		var researchCost = ns.corporation.getResearchCost(division.name, marketTAI) + ns.corporation.getResearchCost(division.name, marketTAII);
+		var researchCost = ns.corporation.getResearchCost(division, marketTAI) + ns.corporation.getResearchCost(division, marketTAII);
 
 		if (division.research > researchCost * 1.1) {
-			ns.print(division.name + " Research " + marketTAI);
-			ns.corporation.research(division.name, marketTAI);
-			ns.print(division.name + " Research " + marketTAII);
-			ns.corporation.research(division.name, marketTAII);
-			for (var product of division.products) {
-				ns.corporation.setProductMarketTA1(division.name, product, true);
-				ns.corporation.setProductMarketTA2(division.name, product, true);
+			ns.print(division + " Research " + marketTAI);
+			ns.corporation.research(division, marketTAI);
+			ns.print(division + " Research " + marketTAII);
+			ns.corporation.research(division, marketTAII);
+			for (var product of ns.corporation.getDivision(division).products) {
+				ns.corporation.setProductMarketTA1(division, product, true);
+				ns.corporation.setProductMarketTA2(division, product, true);
 			}
 		}
 		return;
@@ -241,10 +289,10 @@ function doResearch(ns, division) {
 	else {
 		for (const researchObject of researchList) {
 			// research other upgrades based on available funds and priority; see researchList
-			if (!ns.corporation.hasResearched(division.name, researchObject.name)) {
-				if (division.research > (researchObject.prio * ns.corporation.getResearchCost(division.name, researchObject.name))) {
-					ns.print(division.name + " Research " + researchObject.name);
-					ns.corporation.research(division.name, researchObject.name);
+			if (!ns.corporation.hasResearched(division, researchObject.name)) {
+				if (division.research > (researchObject.prio * ns.corporation.getResearchCost(division, researchObject.name))) {
+					ns.print(division + " Research " + researchObject.name);
+					ns.corporation.research(division, researchObject.name);
 				}
 			}
 		}
@@ -252,23 +300,23 @@ function doResearch(ns, division) {
 }
 
 /** @param {NS} ns **/
-function newProduct(ns, division) {
-	//ns.print("Products: " + division.products);
+function newProduct(ns, division, productCity = "Sector-12") {
+	//ns.print("Products: " + ns.corporation.getDivision(division).products);
 	var productNumbers = [];
-	for (var product of division.products) {
-		if (ns.corporation.getProduct(division.name, product).developmentProgress < 100) {
-			ns.print(division.name + " Product development progress: " + ns.corporation.getProduct(division.name, product).developmentProgress.toFixed(1) + "%");
+	for (var product of ns.corporation.getDivision(division).products) {
+		if (ns.corporation.getProduct(division, productCity, product).developmentProgress < 100) {
+			ns.print(division + " Product development progress: " + ns.corporation.getProduct(division, productCity, product).developmentProgress.toFixed(1) + "%");
 			return false;
 		}
 		else {
 			productNumbers.push(product.charAt(product.length - 1));
 			// initial sell value if nothing is defined yet is 0
-			if (ns.corporation.getProduct(division.name, product).sCost == 0) {
-				ns.print(division.name + " Start selling product " + product);
-				ns.corporation.sellProduct(division.name, "Sector-12", product, "MAX", "MP", true);
-				if (ns.corporation.hasResearched(division.name, "Market-TA.II")) {
-					ns.corporation.setProductMarketTA1(division.name, product, true);
-					ns.corporation.setProductMarketTA2(division.name, product, true);
+			if (ns.corporation.getProduct(division, productCity, product).sCost == 0) {
+				ns.print(division + " Start selling product " + product);
+				ns.corporation.sellProduct(division, productCity, product, "MAX", "MP", true);
+				if (ns.corporation.hasResearched(division, "Market-TA.II")) {
+					ns.corporation.setProductMarketTA1(division, product, true);
+					ns.corporation.setProductMarketTA2(division, product, true);
 				}
 			}
 		}
@@ -276,17 +324,17 @@ function newProduct(ns, division) {
 
 	var numProducts = 3;
 	// amount of products which can be sold in parallel is 3; can be upgraded
-	if (ns.corporation.hasResearched(division.name, "uPgrade: Capacity.I")) {
+	if (ns.corporation.hasResearched(division, "uPgrade: Capacity.I")) {
 		numProducts++;
-		if (ns.corporation.hasResearched(division.name, "uPgrade: Capacity.II")) {
+		if (ns.corporation.hasResearched(division, "uPgrade: Capacity.II")) {
 			numProducts++;
 		}
 	}
 
 	if (productNumbers.length >= numProducts) {
 		// discontinue the oldest product if over max amount of products
-		ns.print(division.name + " Discontinue product " + division.products[0]);
-		ns.corporation.discontinueProduct(division.name, division.products[0]);
+		ns.print(division + " Discontinue product " + ns.corporation.getDivision(division).products[0]);
+		ns.corporation.discontinueProduct(division, ns.corporation.getDivision(division).products[0]);
 	}
 
 	// get the product number of the latest product and increase it by 1 for the mext product. Product names must be unique. 
@@ -311,56 +359,56 @@ function newProduct(ns, division) {
 		}
 	}
 	ns.print("Start new product development " + newProductName);
-	ns.corporation.makeProduct(division.name, "Sector-12", newProductName, productInvest, productInvest);
+	ns.corporation.makeProduct(division, productCity, newProductName, productInvest, productInvest);
 }
 
 /** @param {NS} ns **/
 function initCities(ns, division, productCity = "Sector-12") {
 	for (const city of cities) {
-		ns.print("Expand " + division.name + " to City " + city);
-		if (!division.cities.includes(city)) {
-			ns.corporation.expandCity(division.name, city);
-			ns.corporation.purchaseWarehouse(division.name, city);
+		ns.print("Expand " + division + " to City " + city);
+		if (!ns.corporation.getDivision(division).cities.includes(city)) {
+			ns.corporation.expandCity(division, city);
+			ns.corporation.purchaseWarehouse(division, city);
 		}
 
-		//ns.corporation.setSmartSupply(division.name, city, true); // does not work anymore, bug?
+		//ns.corporation.setSmartSupply(division, city, true); // does not work anymore, bug?
 
 		if (city != productCity) {
 			// setup employees
 			for (let i = 0; i < 3; i++) {
-				ns.corporation.hireEmployee(division.name, city);
+				ns.corporation.hireEmployee(division, city);
 			}
-			ns.corporation.setAutoJobAssignment(division.name, city, "Research & Development", 3);
+			ns.corporation.setAutoJobAssignment(division, city, "Research & Development", 3);
 		}
 		else {
 			const warehouseUpgrades = 3;
 			// get a bigger warehouse in the product city. we can produce and sell more here
 			for (let i = 0; i < warehouseUpgrades; i++) {
-				ns.corporation.upgradeWarehouse(division.name, city);
+				ns.corporation.upgradeWarehouse(division, city);
 			}
 			// get more employees in the main product development city
 			const newEmployees = 9;
-			ns.corporation.upgradeOfficeSize(division.name, productCity, newEmployees);
+			ns.corporation.upgradeOfficeSize(division, productCity, newEmployees);
 			for (let i = 0; i < newEmployees + 3; i++) {
-				ns.corporation.hireEmployee(division.name, productCity);
+				ns.corporation.hireEmployee(division, productCity);
 			}
-			ns.corporation.setAutoJobAssignment(division.name, productCity, "Operations", 4);
-			ns.corporation.setAutoJobAssignment(division.name, productCity, "Engineer", 6);
-			ns.corporation.setAutoJobAssignment(division.name, productCity, "Management", 2);
+			ns.corporation.setAutoJobAssignment(division, productCity, "Operations", 4);
+			ns.corporation.setAutoJobAssignment(division, productCity, "Engineer", 6);
+			ns.corporation.setAutoJobAssignment(division, productCity, "Management", 2);
 		}
 		const warehouseUpgrades = 3;
 		for (let i = 0; i < warehouseUpgrades; i++) {
-			ns.corporation.upgradeWarehouse(division.name, city);
+			ns.corporation.upgradeWarehouse(division, city);
 		}
 	}
 
-	ns.corporation.makeProduct(division.name, productCity, "Product-0", "1e9", "1e9");
+	ns.corporation.makeProduct(division, productCity, "Product-0", "1e9", "1e9");
 }
 
 /** @param {NS} ns **/
 function initialCorpUpgrade(ns) {
 	ns.print("unlock upgrades");
-	ns.corporation.unlockUpgrade("Smart Supply");
+	ns.corporation.purchaseUnlock("Smart Supply");
 	ns.corporation.levelUpgrade("Smart Storage");
 	ns.corporation.levelUpgrade("Smart Storage");
 	ns.corporation.levelUpgrade("Smart Storage");
