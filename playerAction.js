@@ -503,7 +503,7 @@ export async function buyAugments(ns, augmentationCostMultiplier) {
 	}
 
 	// Final part, buys and installs augments
-	if (((goalAugmentationMet || isFasterToReset) && await requestFunds(ns, totalCost, 1)) || forceReset) {
+	if ((goalAugmentationMet && await requestFunds(ns, totalCost, 1)) || forceReset || isFasterToReset) {
 		stockActionPort.write(JSON.stringify(['ACK', true]));
 
 		if (augmentationsToBuy.length <= 0 && (forceReset || isFasterToReset) && !fluxFaction) return;
